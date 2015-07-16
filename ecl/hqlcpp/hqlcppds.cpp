@@ -1373,6 +1373,48 @@ ChildGraphBuilder::ChildGraphBuilder(HqlCppTranslator & _translator, IHqlExpress
     numResults = (unsigned)getIntValue(subgraph->queryChild(1));
 }
 
+IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHqlExpression * resourcedGraph)
+{
+    //Work out which activities in the resourced graph should be executed inline
+    //For the moment expand everything.  Later on this will need more work.
+
+    assertex(resourcedGraph->getOperator() == no_subgraph);
+    ForEachChild(i, resourcedGraph)
+    {
+        IHqlExpression * subgraph = resourcedGraph->queryChild(i);
+        if (subgraph->isAttribute())
+            continue;
+
+        assertex(subgraph->getOperator() == no_subgraph);
+
+        //MORE: check if the subgraph should be evaluated inline.  If so do generate the following
+        //otherwise add it to a list of out-of-line subgraphs
+        ForEachChild(iActivity, subgraph)
+        {
+            IHqlExpression * cur = subgraph->queryChild(iActivity);
+            if (!cur->isAttribute())
+            {
+                assertex(cur->isAction());
+                translator.buildStmt(ctx, cur);
+            }
+        }
+    }
+
+    //If all activities are expanded inline then there is nothing left to go in the child query, so
+    //return NULL to indicate that no subquery should be generated.
+    return NULL;
+
+    //If no activities are done inline then you can return the following as a special case optimization.
+    //Alternatively it could use the clone code below.
+    //return LINK(resourcedGraph);
+
+    //If the code above is selective, then it should produce a filtered array of subgraphs that were not
+    //executed inline.  If that is the case then the function will need to return a graph containing
+    //just those subgraphs.  i.e.,
+    //return resourcedGraph->clone(outoflineSubgraphs);
+    //Note, it should also include attributes in the array so they are preserved.
+}
+
 void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
 {
     if (translator.queryOptions().showChildCountInGraph)
@@ -1388,6 +1430,15 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     if (numResults == 0) numResults++;
 
     OwnedHqlExpr resourced = translator.getResourcedChildGraph(graphctx, childQuery, numResults, no_none);
+
+    DBGLOG("Resourced child graph\n");
+    EclIR::dbglogIR(resourced);
+    if (translator.queryOptions().optimizeInlineOperations)
+    {
+        resourced.setown(optimizeInlineActivities(graphctx, resourced));
+        if (!resourced)
+            return;
+    }
 
     Owned<ParentExtract> extractBuilder = translator.createExtractBuilder(graphctx, PETchild, represents, resourced, true);
     if (!translator.queryOptions().serializeRowsetInExtract)
@@ -1825,6 +1876,14 @@ bool HqlCppTranslator::canProcessInline(BuildCtx * ctx, IHqlExpression * expr)
     if (!isInlineOk())
         return false;
     return ::canProcessInline(ctx, expr);
+}
+
+// for optimizing child query
+bool HqlCppTranslator::mustAssignInline(BuildCtx * ctx, IHqlExpression * expr)
+{
+    if (!isInlineOk())
+        return false;
+    return ::mustAssignInline(ctx, expr);
 }
 
 bool HqlCppTranslator::isInlineOk()
@@ -4972,8 +5031,22 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
     if (!hasLinkCountedModifier(exprType))
         exprType.setown(makeAttributeModifier(LINK(exprType), getLinkCountedAttr()));
 
+    HqlExprArray resultArgs;
+    resultArgs.append(*LINK(expr->queryRecord()));
+    resultArgs.append(*LINK(graphId));
+    resultArgs.append(*LINK(resultNum));
+    OwnedHqlExpr result = createExprAttribute(resultAtom, resultArgs);
+
+    //Check if this particular expression has been calculated inline already, and if
+    //so use that value.
+    //NOTE, needs more work and testing - this may fail if accessed from a nested child query
+    CHqlBoundExpr inlineBound;
+    if (ctx.getMatchExpr(result, inlineBound))
+        return inlineBound.getTranslatedExpr();
+
     if (expr->hasAttribute(externalAtom))
     {
+
         IHqlExpression * resultInstance = queryAttributeChild(expr, externalAtom, 0);
         HqlExprAssociation * matchedResults = ctx.queryMatchExpr(resultInstance);
         if (!matchedResults)

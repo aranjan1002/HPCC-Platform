@@ -751,6 +751,8 @@ struct HqlCppOptions
     bool                optimizeSortAllFields;
     bool                optimizeSortAllFieldsStrict;
     bool                alwaysReuseGlobalSpills;
+    // added for child query project
+    bool                optimizeInlineOperations;
 };
 
 //Any information gathered while processing the query should be moved into here, rather than cluttering up the translator class
@@ -913,6 +915,8 @@ public:
     bool canProcessInline(BuildCtx * ctx, IHqlExpression * expr);
     bool canIterateInline(BuildCtx * ctx, IHqlExpression * expr);
     bool canAssignInline(BuildCtx * ctx, IHqlExpression * expr);
+    // for child query optimization
+    bool mustAssignInline(BuildCtx * ctx, IHqlExpression * expr);
     bool canEvaluateInline(BuildCtx * ctx, IHqlExpression * expr);
 
     void buildAssignChildDataset(BuildCtx & ctx, const CHqlBoundTarget & target, IHqlExpression * expr);
@@ -1389,6 +1393,7 @@ public:
     void doBuildStmtIf(BuildCtx & ctx, IHqlExpression * expr);
     void doBuildStmtNotify(BuildCtx & ctx, IHqlExpression * expr);
     void doBuildStmtOutput(BuildCtx & ctx, IHqlExpression * expr);
+    void doBuildStmtSetGraphResult(BuildCtx & ctx, IHqlExpression * expr);
     void doBuildStmtSetResult(BuildCtx & ctx, IHqlExpression * expr);
     void doBuildStmtSkip(BuildCtx & ctx, IHqlExpression * expr, bool * canReachFollowing);
     void doBuildStmtUpdate(BuildCtx & ctx, IHqlExpression * expr);
@@ -2063,6 +2068,9 @@ extern bool isConstantSet(IHqlExpression * expr);
 extern bool canProcessInline(BuildCtx * ctx, IHqlExpression * expr);
 extern bool canIterateInline(BuildCtx * ctx, IHqlExpression * expr);
 extern bool canAssignInline(BuildCtx * ctx, IHqlExpression * expr);
+// for child query optimization
+extern bool mustAssignInline(BuildCtx * ctx, IHqlExpression * expr);
+
 extern bool canEvaluateInline(BuildCtx * ctx, IHqlExpression * expr);
 extern bool canAssignNotEvaluateInline(BuildCtx * ctx, IHqlExpression * expr);
 extern bool isNonLocal(IHqlExpression * expr, bool optimizeParentAccess);
