@@ -1435,9 +1435,9 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     EclIR::dbglogIR(resourced);
     if (translator.queryOptions().optimizeInlineOperations)
     {
-        resourced.setown(optimizeInlineActivities(graphctx, resourced));
-        if (!resourced)
-            return;
+      //resourced.setown(optimizeInlineActivities(graphctx, resourced));
+      //if (!resourced)
+      //      return;
     }
 
     Owned<ParentExtract> extractBuilder = translator.createExtractBuilder(graphctx, PETchild, represents, resourced, true);
