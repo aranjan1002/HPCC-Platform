@@ -412,15 +412,16 @@ bool mustAssignInline(BuildCtx *ctx, IHqlExpression *expr)
     node_operator op = expr->getOperator();
     switch(op)
     {
-    case no_getgraphresult:
-    case no_left:
-    case no_right:
-    case no_workunit_dataset:
-    case no_getresult:
+//    case no_getgraphresult:
+//    case no_left:
+//    case no_right:
+//    case no_workunit_dataset:
+//    case no_getresult:
         //MORE: what else?
-        return true;
-    case no_alias:
-        return mustAssignInline(ctx, expr->queryChild(0));
+    case no_createrow:
+          return true;
+//    case no_alias:
+//        return mustAssignInline(ctx, expr->queryChild(0));
     default:
         DBGLOG("Actvity not generated inline:");
         EclIR::dbglogIR(expr);

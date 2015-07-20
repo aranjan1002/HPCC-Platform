@@ -1766,6 +1766,7 @@ void HqlCppTranslator::cacheOptions()
         DebugOption(options.alwaysReuseGlobalSpills,"alwaysReuseGlobalSpills",true),
         // added for child query project
         DebugOption(options.optimizeInlineOperations, "optimizeInlineOperations", false),
+        DebugOption(options.minimalOperationsInline, "minimalOperationsInline", false),
     };
 
     //get options values from workunit

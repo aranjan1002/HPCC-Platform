@@ -335,7 +335,10 @@ public:
 
         if (expr->isDataset() || (expr->isDatarow() && (op != no_select)))
         {
-            if (translator.queryOptions().optimizeInlineOperations)
+            bool optInline = translator.queryOptions().optimizeInlineOperations;
+            bool minInline = translator.queryOptions().minimalOperationsInline;
+            if (translator.queryOptions().optimizeInlineOperations || 
+                translator.queryOptions().minimalOperationsInline)
             {
                 if (!translator.mustAssignInline(&ctx, expr))
                 {
