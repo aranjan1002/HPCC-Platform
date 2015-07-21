@@ -417,6 +417,7 @@ bool mustAssignInline(BuildCtx *ctx, IHqlExpression *expr)
     case no_right:
     case no_workunit_dataset:
     case no_getresult:
+    case no_createrow:
         //MORE: what else?
         return true;
     case no_alias:
