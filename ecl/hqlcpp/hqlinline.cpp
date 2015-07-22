@@ -373,6 +373,8 @@ static unsigned calcInlineFlags(BuildCtx * ctx, IHqlExpression * expr)
         }
     case no_compound:
         return getInlineFlags(ctx, expr->queryChild(1));
+    case no_split:
+        return RETevaluate;
     default:
         return 0;
     }
@@ -417,6 +419,7 @@ bool mustAssignInline(BuildCtx *ctx, IHqlExpression *expr)
     case no_right:
     case no_workunit_dataset:
     case no_getresult:
+    case no_createrow:
         //MORE: what else?
         return true;
     case no_alias:

@@ -6,7 +6,7 @@ idRecord := RECORD
 END;
 
 makeChildren(unsigned num, unsigned first, REAL scale) :=
-    DATASET(num, TRANSFORM(childRecord, SELF.cid := (unsigned)(first  (COUNTER-1)*scale)));
+    DATASET(num, TRANSFORM(childRecord, SELF.cid := (unsigned)(first + (COUNTER-1)*scale)));
 
 idRecord makeId(unsigned id, unsigned num, unsigned first, REAL scale) := TRANSFORM
     SELF.id := id;

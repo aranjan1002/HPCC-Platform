@@ -1394,6 +1394,8 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
             IHqlExpression * cur = subgraph->queryChild(iActivity);
             if (!cur->isAttribute())
             {
+                const char* temp = EclIR::getOperatorIRText(cur->getOperator());
+                DBGLOG(temp);
                 assertex(cur->isAction());
                 translator.buildStmt(ctx, cur);
             }
@@ -2200,6 +2202,7 @@ void HqlCppTranslator::doBuildDataset(BuildCtx & ctx, IHqlExpression * expr, CHq
     case no_nofold:
     case no_nohoist:
     case no_section:
+    case no_split:
     case no_sectioninput:
         buildDataset(ctx, expr->queryChild(0), tgt, format);
         return;
