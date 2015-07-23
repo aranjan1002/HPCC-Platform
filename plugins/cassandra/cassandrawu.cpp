@@ -263,63 +263,6 @@ public:
     }
 } wuidColumnMapper;
 
-static class GraphIdColumnMapper : implements CassandraColumnMapper
-{
-public:
-    virtual IPTree *toXML(IPTree *row, const char *name, const CassValue *value)
-    {
-        rtlDataAttr str;
-        unsigned chars;
-        getUTF8Result(NULL, value, chars, str.refstr());
-        StringAttr s(str.getstr(), rtlUtf8Size(chars, str.getstr()));
-        if (strcmp(s, "Running")==0)  // The input XML structure is a little odd
-            return row;
-        else
-        {
-            if (!row->hasProp(s))
-                row->addPropTree(s, createPTree());
-            return row->queryPropTree(s);
-        }
-    }
-    virtual bool fromXML(CassandraStatement *statement, unsigned idx, IPTree *row, const char *name, const char * userVal)
-    {
-        const char *value = row->queryName();
-        if (!value)
-            return false;
-        if (statement)
-            statement->bindString(idx, value);
-        return true;
-    }
-} graphIdColumnMapper;
-
-static class ProgressColumnMapper : implements CassandraColumnMapper
-{
-public:
-    virtual IPTree *toXML(IPTree *row, const char *name, const CassValue *value)
-    {
-        rtlDataAttr str;
-        unsigned chars;
-        getDataResult(NULL, value, chars, str.refdata());  // Stored as a blob in case we want to compress
-        IPTree *child = createPTreeFromXMLString(chars, str.getstr());  // For now, assume we did not compress!
-        row->addPropTree(child->queryName(), child);
-        return child;
-    }
-    virtual bool fromXML(CassandraStatement *statement, unsigned idx, IPTree *row, const char *name, const char * userVal)
-    {
-        // MORE - may need to read, and probably should write, compressed.
-        StringBuffer value;
-        ::toXML(row, value, 0, 0);
-        if (value.length())
-        {
-            if (statement)
-                statement->bindBytes(idx, (const cass_byte_t *) value.str(), value.length());
-            return true;
-        }
-        else
-            return false;
-    }
-} progressColumnMapper;
-
 static class BoolColumnMapper : implements CassandraColumnMapper
 {
 public:
@@ -458,27 +401,6 @@ public:
             return false;
     }
 } bigintColumnMapper;
-
-static class SubgraphIdColumnMapper : implements CassandraColumnMapper
-{
-public:
-    virtual IPTree *toXML(IPTree *row, const char *name, const CassValue *value)
-    {
-        __int64 id = getSignedResult(NULL, value);
-        if (id)
-            row->addPropInt64(name, id);
-        return row;
-    }
-    virtual bool fromXML(CassandraStatement *statement, unsigned idx, IPTree *row, const char *name, const char *userVal)
-    {
-        if (statement)
-        {
-            int value = row->getPropInt(name);
-            statement->bindInt64(idx, value);
-        }
-        return true;
-    }
-} subgraphIdColumnMapper;
 
 static class SimpleMapColumnMapper : implements CassandraColumnMapper
 {
@@ -719,6 +641,7 @@ public:
     }
 } subTreeMapColumnMapper;
 
+/*
 static class QueryTextColumnMapper : public StringColumnMapper
 {
 public:
@@ -735,6 +658,7 @@ public:
         return StringColumnMapper::toXML(query, "Text", value);
     }
 } queryTextColumnMapper;
+*/
 
 static class GraphMapColumnMapper : implements CassandraColumnMapper
 {
@@ -793,28 +717,8 @@ public:
 private:
     const char *elemName;
     const char *nameAttr;
-} graphMapColumnMapper("Graph", "@name"), workflowMapColumnMapper("Item", "@wfid");
+} graphMapColumnMapper("Graph", "@name"), workflowMapColumnMapper("Item", "@wfid"), associationsMapColumnMapper("File", "@filename");;
 
-static class AssociationsMapColumnMapper : public GraphMapColumnMapper
-{
-public:
-    AssociationsMapColumnMapper(const char *_elemName, const char *_nameAttr)
-    : GraphMapColumnMapper(_elemName, _nameAttr)
-    {
-    }
-    virtual IPTree *toXML(IPTree *row, const char *name, const CassValue *value)
-    {
-        // Name is "Query/Associated ...
-        IPTree *query = row->queryPropTree("Query");
-        if (!query)
-        {
-            query = createPTree("Query");
-            row->setPropTree("Query", query);
-            row->setProp("Query/@fetchEntire", "1"); // Compatibility...
-        }
-        return GraphMapColumnMapper::toXML(query, "Associated", value);
-    }
-} associationsMapColumnMapper("File", "@filename");
 
 static class WarningsMapColumnMapper : implements CassandraColumnMapper
 {
@@ -955,15 +859,13 @@ static const CassandraXmlMapping workunitsMappings [] =
     {"debug", "map<text, text>", "Debug", simpleMapColumnMapper},
     {"attributes", "map<text, text>", "@wuid@clusterName@jobName@priorityClass@protected@scope@submitID@state@timeScheduled@totalThorTime@", attributeMapColumnMapper},  // name is the suppression list, note trailing @
     {"plugins", "list<text>", "Plugins", pluginListColumnMapper},
-    {"query", "text", "Query/Text", queryTextColumnMapper},        // MORE - make me lazy...
-    {"associations", "map<text, text>", "Query/Associated", associationsMapColumnMapper},
     {"workflow", "map<text, text>", "Workflow", workflowMapColumnMapper},
     {"onWarnings", "map<int, text>", "OnWarnings/OnWarning", warningsMapColumnMapper},
 
     // These are catchalls for anything not processed above or in a child table
 
     {"elements", "map<text, text>", "@Action@Application@Debug@Exceptions@FilesRead@Graphs@Results@Statistics@Plugins@Query@Variables@Temporaries@Workflow@", elementMapColumnMapper},  // name is the suppression list, note trailing @
-    {"subtrees", "map<text, text>", "@Process@Tracing@", subTreeMapColumnMapper},  // name is the INCLUSION list, note trailing @
+    {"subtrees", "map<text, text>", "@Parameters@Process@Tracing@", subTreeMapColumnMapper},  // name is the INCLUSION list, note trailing @
 
     { NULL, "workunits", "((partition), wuid)|CLUSTERING ORDER BY (wuid DESC)", stringColumnMapper}
 };
@@ -1049,7 +951,7 @@ static const CassandraXmlMapping filesReadSearchMappings [] =
 
 // The following describe child tables - all keyed by wuid
 
-enum ChildTablesEnum { WuExceptionsChild, WuStatisticsChild, WuGraphsChild, WuGraphProgressChild, WuResultsChild, WuVariablesChild, WuTemporariesChild, WuFilesReadChild,ChildTablesSize };
+enum ChildTablesEnum { WuQueryChild, WuExceptionsChild, WuStatisticsChild, WuGraphsChild, WuResultsChild, WuVariablesChild, WuTemporariesChild, WuFilesReadChild,ChildTablesSize };
 
 struct ChildTableInfo
 {
@@ -1058,6 +960,28 @@ struct ChildTableInfo
     ChildTablesEnum index;
     const CassandraXmlMapping *mappings;
 };
+
+// wuQueries table is slightly unusual among the child tables as is is 1:1 - it is split out for lazy load purposes.
+
+static const CassandraXmlMapping wuQueryMappings [] =
+{
+    {"partition", "int", NULL, hashRootNameColumnMapper},
+    {"wuid", "text", NULL, rootNameColumnMapper},
+    {"associations", "map<text, text>", "Associated", associationsMapColumnMapper},
+    {"attributes", "map<text, text>", "", attributeMapColumnMapper},
+    {"query", "text", "Text", stringColumnMapper}, // May want to make this even lazier...
+    {"shortQuery", "text", "ShortText", stringColumnMapper},
+    { NULL, "wuQueries", "((partition, wuid))", stringColumnMapper}
+};
+
+static const ChildTableInfo wuQueriesTable =
+{
+    "Query", NULL,
+    WuQueryChild,
+    wuQueryMappings
+};
+
+// wuExceptions table holds the exceptions associated with a wuid
 
 static const CassandraXmlMapping wuExceptionsMappings [] =
 {
@@ -1093,24 +1017,6 @@ static const ChildTableInfo wuStatisticsTable =
     "Statistics", "Statistic",
     WuStatisticsChild,
     wuStatisticsMappings
-};
-
-static const CassandraXmlMapping wuGraphProgressMappings [] =
-{
-    {"partition", "int", NULL, hashRootNameColumnMapper},
-    {"wuid", "text", NULL, rootNameColumnMapper},
-    {"graphID", "text", NULL, graphIdColumnMapper},
-    {"progress", "blob", NULL, progressColumnMapper},  // NOTE - order of these is significant - this creates the subtree that ones below will modify
-    {"subgraphID", "text", "@id", subgraphIdColumnMapper},
-    {"state", "int", "@_state", intColumnMapper},
-    { NULL, "wuGraphProgress", "((partition, wuid), graphid, subgraphid)", stringColumnMapper}
-};
-
-static const ChildTableInfo wuGraphProgressTable =
-{
-    "Bit of a", "Special case",
-    WuGraphProgressChild,
-    wuGraphProgressMappings
 };
 
 static const CassandraXmlMapping wuGraphsMappings [] =
@@ -1222,7 +1128,39 @@ static const ChildTableInfo wuFilesReadTable =
 };
 
 // Order should match the enum above
-static const ChildTableInfo * const childTables [] = { &wuExceptionsTable, &wuStatisticsTable, &wuGraphsTable, &wuGraphProgressTable, &wuResultsTable, &wuVariablesTable, &wuTemporariesTable, &wuFilesReadTable, NULL };
+static const ChildTableInfo * const childTables [] = { &wuQueriesTable, &wuExceptionsTable, &wuStatisticsTable, &wuGraphsTable, &wuResultsTable, &wuVariablesTable, &wuTemporariesTable, &wuFilesReadTable, NULL };
+
+// Graph progress tables are read directly, XML mappers not used
+
+static const CassandraXmlMapping wuGraphProgressMappings [] =
+{
+    {"partition", "int", NULL, hashRootNameColumnMapper},
+    {"wuid", "text", NULL, rootNameColumnMapper},
+    {"graphID", "text", NULL, stringColumnMapper},
+    {"subgraphID", "text", NULL, stringColumnMapper},
+    {"creator", "text", NULL, stringColumnMapper},
+    {"progress", "blob", NULL, blobColumnMapper},
+    { NULL, "wuGraphProgress", "((partition, wuid), graphID, subgraphID, creator)", stringColumnMapper}
+};
+
+static const CassandraXmlMapping wuGraphStateMappings [] =
+{
+    {"partition", "int", NULL, hashRootNameColumnMapper},
+    {"wuid", "text", NULL, rootNameColumnMapper},
+    {"graphID", "text", NULL, stringColumnMapper},
+    {"subgraphID", "text", NULL, stringColumnMapper},
+    {"state", "int", NULL, intColumnMapper},
+    { NULL, "wuGraphState", "((partition, wuid), graphID, subgraphID)", stringColumnMapper}
+};
+
+static const CassandraXmlMapping wuGraphRunningMappings [] =
+{
+    {"partition", "int", NULL, hashRootNameColumnMapper},
+    {"wuid", "text", NULL, rootNameColumnMapper},
+    {"graphID", "text", NULL, stringColumnMapper},
+    {"subgraphID", "int", NULL, intColumnMapper},
+    { NULL, "wuGraphRunning", "((partition, wuid))", stringColumnMapper}
+};
 
 interface ICassandraSession : public IInterface  // MORE - rename!
 {
@@ -1425,111 +1363,6 @@ extern void childXMLtoCassandra(const ICassandraSession *session, CassBatch *bat
     Owned<IPTreeIterator> elements = inXML->getElements(xpath);
     childXMLtoCassandra(session, batch, mappings, inXML->queryName(), elements, defaultValue);
 }
-
-/*
-extern void graphProgressXMLtoCassandra(CassSession *session, IPTree *inXML)
-{
-    StringBuffer names;
-    StringBuffer bindings;
-    StringBuffer tableName;
-    int numBound = getFieldNames(graphProgressMappings, names, bindings, tableName);
-    VStringBuffer insertQuery("INSERT into %s (%s) values (%s);", tableName.str(), names.str()+1, bindings.str()+1);
-    DBGLOG("%s", insertQuery.str());
-    CassandraBatch batch(cass_batch_new(CASS_BATCH_TYPE_UNLOGGED));
-    CassandraFuture futurePrep(cass_session_prepare(session, insertQuery));
-    futurePrep.wait("prepare statement");
-    CassandraPrepared prepared(cass_future_get_prepared(futurePrep));
-
-    Owned<IPTreeIterator> graphs = inXML->getElements("./graph*");
-    ForEach(*graphs)
-    {
-        IPTree &graph = graphs->query();
-        Owned<IPTreeIterator> subgraphs = graph.getElements("./node");
-        ForEach(*subgraphs)
-        {
-            IPTree &subgraph = subgraphs->query();
-            CassandraStatement update(cass_prepared_bind(prepared));
-            graphProgressMappings[0].mapper.fromXML(update, 0, inXML, graphProgressMappings[0].xpath);
-            graphProgressMappings[1].mapper.fromXML(update, 1, &graph, graphProgressMappings[1].xpath);
-            unsigned colidx = 2;
-            while (graphProgressMappings[colidx].columnName)
-            {
-                graphProgressMappings[colidx].mapper.fromXML(update, colidx, &subgraph, graphProgressMappings[colidx].xpath);
-                colidx++;
-            }
-            check(cass_batch_add_statement(batch, update));
-        }
-        // And one more with subgraphid = 0 for the graph status
-        CassandraStatement update(cass_statement_new(insertQuery.str(), bindings.length()/2));
-        graphProgressMappings[0].mapper.fromXML(update, 0, inXML, graphProgressMappings[0].xpath);
-        graphProgressMappings[1].mapper.fromXML(update, 1, &graph, graphProgressMappings[1].xpath);
-        check(cass_statement_bind_int64(update, 3, 0)); // subgraphId can't be null, as it's in the key
-        unsigned colidx = 4;  // we skip progress and subgraphid
-        while (graphProgressMappings[colidx].columnName)
-        {
-            graphProgressMappings[colidx].mapper.fromXML(update, colidx, &graph, graphProgressMappings[colidx].xpath);
-            colidx++;
-        }
-        check(cass_batch_add_statement(batch, update));
-    }
-    if (inXML->hasProp("Running"))
-    {
-        IPTree *running = inXML->queryPropTree("Running");
-        CassandraStatement update(cass_statement_new(insertQuery.str(), bindings.length()/2));
-        graphProgressMappings[0].mapper.fromXML(update, 0, inXML, graphProgressMappings[0].xpath);
-        graphProgressMappings[1].mapper.fromXML(update, 1, running, graphProgressMappings[1].xpath);
-        graphProgressMappings[2].mapper.fromXML(update, 2, running, graphProgressMappings[2].xpath);
-        check(cass_statement_bind_int64(update, 3, 0)); // subgraphId can't be null, as it's in the key
-        check(cass_batch_add_statement(batch, update));
-    }
-    CassandraFuture futureBatch(cass_session_execute_batch(session, batch));
-    futureBatch.wait("execute");
-}
-
-extern void cassandraToGraphProgressXML(CassSession *session, const char *wuid)
-{
-    CassandraResult result(fetchDataForWu(wuid, session, graphProgressMappings));
-    Owned<IPTree> progress = createPTree(wuid);
-    CassandraIterator rows(cass_iterator_from_result(result));
-    while (cass_iterator_next(rows))
-    {
-        CassandraIterator cols(cass_iterator_from_row(cass_iterator_get_row(rows)));
-        unsigned colidx = 1;  // wuid is not returned
-        IPTree *ptree = progress;
-        while (cass_iterator_next(cols))
-        {
-            assertex(graphProgressMappings[colidx].columnName);
-            const CassValue *value = cass_iterator_get_column(cols);
-            // NOTE - this relies on the fact that progress is NULL when subgraphId=0, so that the status and id fields
-            // get set on the graph instead of on the child node in those cases.
-            if (value && !cass_value_is_null(value))
-                ptree = graphProgressMappings[colidx].mapper.toXML(ptree, graphProgressMappings[colidx].xpath, value);
-            colidx++;
-        }
-    }
-    StringBuffer out;
-    toXML(progress, out, 0, XML_SortTags|XML_Format);
-    printf("%s", out.str());
-}
-*/
-
-/*
-extern void cassandraTestGraphProgressXML()
-{
-    CassandraCluster cluster(cass_cluster_new());
-    cass_cluster_set_contact_points(cluster, "127.0.0.1");
-    CassandraSession session(cass_session_new());
-    CassandraFuture future(cass_session_connect_keyspace(session, cluster, "hpcc"));
-    future.wait("connect");
-
-    ensureTable(session, graphProgressMappings);
-    Owned<IPTree> inXML = createPTreeFromXMLFile("/data/rchapman/hpcc/testing/regress/ecl/a.xml");
-    graphProgressXMLtoCassandra(session, inXML);
-    const char *wuid = inXML->queryName();
-    cassandraToGraphProgressXML(session, wuid);
-}
-
-*/
 
 static IPTree *rowToPTree(const char *xpath, const char *key, const CassandraXmlMapping *mappings, const CassRow *row)
 {
@@ -1741,7 +1574,7 @@ public:
         }
         rows.add(row, idx+1);
         wuids.add(wuid, idx+1);
-        fieldValues.add(fieldValue, idx+1);
+        fieldValues.add(fieldValue ? fieldValue : "", idx+1);
     }
     IConstWorkUnitIteratorEx *getResult() const
     {
@@ -2248,6 +2081,9 @@ public:
             batch.setown(new CassandraBatch(cass_batch_new(CASS_BATCH_TYPE_UNLOGGED)));
         deleteChildren(wuid);
         deleteSecondaries(wuid);
+        sessionCache->deleteChildByWuid(wuGraphProgressMappings, wuid, *batch);
+        sessionCache->deleteChildByWuid(wuGraphStateMappings, wuid, *batch);
+        sessionCache->deleteChildByWuid(wuGraphRunningMappings, wuid, *batch);
         CassandraStatement update(sessionCache->prepareStatement("DELETE from workunits where partition=? and wuid=?;"));
         update.bindInt32(0, rtlHash32VStr(wuid, 0) % NUM_PARTITIONS);
         update.bindString(1, wuid);
@@ -2267,16 +2103,20 @@ public:
         if (batch)
         {
             const char *wuid = queryWuid();
-            if (prev) // Holds the values of the "basic" info at the last commit
-                updateSecondaries(wuid);
-            simpleXMLtoCassandra(sessionCache, *batch, workunitsMappings, p);  // This just does the parent row
-            if (allDirty)
+            bool isGlobal = streq(wuid, GLOBAL_WORKUNIT);
+            if (!isGlobal) // Global workunit only has child rows, no parent
+            {
+                if (prev) // Holds the values of the "basic" info at the last commit
+                    updateSecondaries(wuid);
+                simpleXMLtoCassandra(sessionCache, *batch, workunitsMappings, p);  // This just does the parent row
+            }
+            if (allDirty && !isGlobal)
             {
                 // MORE - this delete is technically correct, but if we assert that the only place that copyWorkUnit is used is to populate an
                 // empty newly-created WU, it is unnecessary.
                 //deleteChildren(wuid);
 
-                // MORE can use the table
+                // MORE can use the table?
                 childXMLtoCassandra(sessionCache, *batch, wuGraphsMappings, p, "Graphs/Graph", 0);
                 childXMLtoCassandra(sessionCache, *batch, wuResultsMappings, p, "Results/Result", "0");
                 childXMLtoCassandra(sessionCache, *batch, wuVariablesMappings, p, "Variables/Variable", "-1"); // ResultSequenceStored
@@ -2284,6 +2124,9 @@ public:
                 childXMLtoCassandra(sessionCache, *batch, wuExceptionsMappings, p, "Exceptions/Exception", 0);
                 childXMLtoCassandra(sessionCache, *batch, wuStatisticsMappings, p, "Statistics/Statistic", 0);
                 childXMLtoCassandra(sessionCache, *batch, wuFilesReadMappings, p, "FilesRead/File", 0);
+                IPTree *query = p->queryPropTree("Query");
+                if (query)
+                    childXMLRowtoCassandra(sessionCache, *batch, wuQueryMappings, wuid, *query, 0);
             }
             else
             {
@@ -2330,6 +2173,8 @@ public:
                     }
                 }
             }
+            if (sessionCache->queryTraceLevel() > 1)
+                DBGLOG("Executing batch");
             CassandraFuture futureBatch(cass_session_execute_batch(sessionCache->querySession(), *batch));
             futureBatch.wait("execute");
             batch.setown(new CassandraBatch(cass_batch_new(CASS_BATCH_TYPE_UNLOGGED))); // Commit leaves it locked...
@@ -2431,6 +2276,16 @@ public:
     {
         return noteDirty(CPersistedWorkUnit::updateVariableByName(name));
     }
+    virtual IWUQuery * updateQuery()
+    {
+        noteDirty("Query", wuQueryMappings);
+        return CPersistedWorkUnit::updateQuery();
+    }
+    virtual IConstWUQuery *getQuery() const
+    {
+        checkChildLoaded(wuQueriesTable);
+        return CPersistedWorkUnit::getQuery();
+    }
     virtual IWUException *createException()
     {
         IWUException *result = CPersistedWorkUnit::createException();
@@ -2469,6 +2324,169 @@ public:
             }
         }
     }
+
+    virtual void clearGraphProgress() const
+    {
+        const char *wuid = queryWuid();
+        CassandraBatch batch(cass_batch_new(CASS_BATCH_TYPE_UNLOGGED));
+        sessionCache->deleteChildByWuid(wuGraphProgressMappings, wuid, batch);
+        sessionCache->deleteChildByWuid(wuGraphStateMappings, wuid, batch);
+        sessionCache->deleteChildByWuid(wuGraphRunningMappings, wuid, batch);
+        CassandraFuture futureBatch(cass_session_execute_batch(sessionCache->querySession(), batch));
+        futureBatch.wait("clearGraphProgress");
+    }
+    virtual bool getRunningGraph(IStringVal &graphName, WUGraphIDType &subId) const
+    {
+        CassandraStatement statement(sessionCache->prepareStatement("SELECT graphID, subgraphID FROM wuGraphRunning where partition=? and wuid=?;"));
+        const char *wuid = queryWuid();
+        statement.bindInt32(0, rtlHash32VStr(wuid, 0) % NUM_PARTITIONS);
+        statement.bindString(1, wuid);
+        CassandraFuture future(cass_session_execute(sessionCache->querySession(), statement));
+        future.wait("getRunningGraph");
+        CassandraResult result(cass_future_get_result(future));
+        if (cass_result_row_count(result))
+        {
+            const CassRow *row = cass_result_first_row(result);
+            assertex(row);
+            StringBuffer b;
+            getCassString(b, cass_row_get_column(row, 0));
+            graphName.set(b);
+            subId = getUnsignedResult(NULL, cass_row_get_column(row, 1));
+            return true;
+        }
+        else
+            return false;
+    }
+    virtual IConstWUGraphProgress *getGraphProgress(const char *graphName) const
+    {
+        CassandraStatement statement(sessionCache->prepareStatement("SELECT subgraphID, creator, progress FROM wuGraphProgress where partition=? and wuid=? and graphID=?;"));
+        const char *wuid = queryWuid();
+        statement.bindInt32(0, rtlHash32VStr(wuid, 0) % NUM_PARTITIONS);
+        statement.bindString(1, wuid);
+        statement.bindString(2, graphName);
+        CassandraFuture future(cass_session_execute(sessionCache->querySession(), statement));
+        future.wait("getGraphProgress");
+        CassandraResult result(cass_future_get_result(future));
+        CassandraIterator rows(cass_iterator_from_result(result));
+        if (!cass_result_row_count(result))
+            return NULL;
+        Owned<IPropertyTree> progress = createPTree(graphName);
+        progress->setPropBool("@stats", true);
+        progress->setPropInt("@format", PROGRESS_FORMAT_V);
+        while (cass_iterator_next(rows))
+        {
+            const CassRow *row = cass_iterator_get_row(rows);
+            unsigned subId = subId = getUnsignedResult(NULL, cass_row_get_column(row, 0));
+            StringBuffer creator, xml;
+            getCassString(creator, cass_row_get_column(row, 1));
+            getCassString(xml, cass_row_get_column(row, 2));
+            IPTree *stats = createPTreeFromXMLString(xml);
+            // We could check that atoi(stats->queryName()+2)==subgraphID, and that stats->queryProp(@creator)==creator)....
+            progress->addPropTree(stats->queryName(), stats);
+        }
+        return createConstGraphProgress(queryWuid(), graphName, progress); // Links progress
+    }
+    WUGraphState queryGraphState(const char *graphName) const
+    {
+        return queryNodeState(graphName, 0);
+    }
+    WUGraphState queryNodeState(const char *graphName, WUGraphIDType nodeId) const
+    {
+        CassandraStatement statement(sessionCache->prepareStatement("SELECT state FROM wuGraphState where partition=? and wuid=? and graphID=? and subgraphID=?;"));
+        const char *wuid = queryWuid();
+        statement.bindInt32(0, rtlHash32VStr(wuid, 0) % NUM_PARTITIONS);
+        statement.bindString(1, wuid);
+        statement.bindString(2, graphName);
+        statement.bindInt32(3, nodeId);
+        CassandraFuture future(cass_session_execute(sessionCache->querySession(), statement));
+        future.wait("queryNodeState");
+        CassandraResult result(cass_future_get_result(future));
+        if (cass_result_row_count(result))
+            return (WUGraphState) getUnsignedResult(NULL, getSingleResult(result));
+        else
+            return WUGraphUnknown;
+    }
+    void setGraphState(const char *graphName, WUGraphState state) const
+    {
+        setNodeState(graphName, 0, state);
+    }
+    void setNodeState(const char *graphName, WUGraphIDType nodeId, WUGraphState state) const
+    {
+        CassandraStatement statement(sessionCache->prepareStatement("INSERT INTO wuGraphState (partition, wuid, graphID, subgraphID, state) values (?,?,?,?,?);"));
+        const char *wuid = queryWuid();
+        statement.bindInt32(0, rtlHash32VStr(wuid, 0) % NUM_PARTITIONS);
+        statement.bindString(1, wuid);
+        statement.bindString(2, graphName);
+        statement.bindInt32(3, nodeId);
+        statement.bindInt32(4, (int) state);
+        CassandraFuture future(cass_session_execute(sessionCache->querySession(), statement));
+        future.wait("setNodeState update state");
+        if (nodeId)
+        {
+            switch (state)
+            {
+                case WUGraphRunning:
+                {
+                    CassandraStatement statement2(sessionCache->prepareStatement("INSERT INTO wuGraphRunning (partition, wuid, graphID, subgraphID) values (?,?,?,?);"));
+                    statement2.bindInt32(0, rtlHash32VStr(wuid, 0) % NUM_PARTITIONS);
+                    statement2.bindString(1, wuid);
+                    statement2.bindString(2, graphName);
+                    statement2.bindInt32(3, nodeId);
+                    CassandraFuture future(cass_session_execute(sessionCache->querySession(), statement2));
+                    future.wait("setNodeState update running");
+                    break;
+                }
+                case WUGraphComplete:
+                {
+                    CassandraStatement statement3(sessionCache->prepareStatement("DELETE FROM wuGraphRunning where partition=? and wuid=?;"));
+                    statement3.bindInt32(0, rtlHash32VStr(wuid, 0) % NUM_PARTITIONS);
+                    statement3.bindString(1, wuid);
+                    CassandraFuture future(cass_session_execute(sessionCache->querySession(), statement3));
+                    future.wait("setNodeState remove running");
+                    break;
+                }
+            }
+        }
+    }
+    class CCassandraWuGraphStats : public CWuGraphStats
+    {
+    public:
+        CCassandraWuGraphStats(const char *_wuid, const ICassandraSession *_sessionCache, StatisticCreatorType _creatorType, const char * _creator, const char * _rootScope, unsigned _id)
+        : CWuGraphStats(createPTree(_rootScope), _creatorType, _creator, _rootScope, _id),
+          wuid(_wuid), sessionCache(_sessionCache)
+        {
+        }
+        virtual void beforeDispose()
+        {
+            CWuGraphStats::beforeDispose(); // Sets up progress - should contain a single child tree sqNN where nn==id
+            CassandraStatement statement(sessionCache->prepareStatement("INSERT INTO wuGraphProgress (partition, wuid, graphID, subgraphID, creator, progress) values (?,?,?,?,?,?);"));
+            statement.bindInt32(0, rtlHash32VStr(wuid, 0) % NUM_PARTITIONS);
+            statement.bindString(1, wuid);
+            statement.bindString(2, progress->queryName());
+            statement.bindInt32(3, id);
+            statement.bindString(4, creator);
+            StringBuffer tag;
+            tag.append("sg").append(id);
+            IPTree *sq = progress->queryPropTree(tag);
+            assertex(sq);
+            StringBuffer xml;
+            toXML(sq, xml);
+            statement.bindString(5, xml);
+            CassandraFuture future(cass_session_execute(sessionCache->querySession(), statement));
+            future.wait("update stats");
+        }
+
+    protected:
+        Linked<const ICassandraSession> sessionCache;
+        StringAttr wuid;
+    };
+
+
+    IWUGraphStats *updateStats(const char *graphName, StatisticCreatorType creatorType, const char * creator, unsigned subgraph) const
+    {
+        return new CCassandraWuGraphStats(queryWuid(), sessionCache, creatorType, creator, graphName, subgraph);
+    }
+
 
     virtual void _loadFilesRead() const
     {
@@ -2544,6 +2562,8 @@ public:
 protected:
     void createBatch()
     {
+        if (sessionCache->queryTraceLevel() > 1)
+            DBGLOG("Creating batch");
         batch.setown(new CassandraBatch(cass_batch_new(CASS_BATCH_TYPE_UNLOGGED)));
     }
     // Delete child table rows
@@ -2560,15 +2580,18 @@ protected:
         if (!childLoaded[childTable.index])
         {
             CassandraResult result(sessionCache->fetchDataForWuid(childTable.mappings, queryWuid(), false));
-            Owned<IPTree> results;
+            IPTree *results = p->queryPropTree(childTable.parentElement);
             CassandraIterator rows(cass_iterator_from_result(result));
             while (cass_iterator_next(rows))
             {
                 CassandraIterator cols(cass_iterator_from_row(cass_iterator_get_row(rows)));
                 Owned<IPTree> child;
                 if (!results)
-                    results.setown(createPTree(childTable.parentElement));
-                child.setown(createPTree(childTable.childElement));
+                    results = ensurePTree(p, childTable.parentElement);
+                if (childTable.childElement)
+                    child.setown(createPTree(childTable.childElement));
+                else
+                    child.set(results);
                 unsigned colidx = 2;  // We did not fetch wuid or partition
                 while (cass_iterator_next(cols))
                 {
@@ -2578,11 +2601,12 @@ protected:
                         childTable.mappings[colidx].mapper.toXML(child, childTable.mappings[colidx].xpath, value);
                     colidx++;
                 }
-                const char *childName = child->queryName();
-                results->addPropTree(childName, child.getClear());
+                if (childTable.childElement)
+                {
+                    const char *childName = child->queryName();
+                    results->addPropTree(childName, child.getClear());
+                }
             }
-            if (results)
-                p->addPropTree(childTable.parentElement, results.getClear());
             childLoaded[childTable.index] = true;
         }
     }
@@ -2833,7 +2857,15 @@ public:
         return wu.getClear();
     }
 
-    virtual IWorkUnit * getGlobalWorkUnit(ISecManager *secmgr = NULL, ISecUser *secuser = NULL) { UNIMPLEMENTED; }
+    virtual IWorkUnit * getGlobalWorkUnit(ISecManager *secmgr = NULL, ISecUser *secuser = NULL)
+    {
+        // MORE - should it check security? Dali version never did...
+        Owned<IRemoteConnection> daliLock;
+        lockWuid(daliLock, GLOBAL_WORKUNIT);
+        Owned<IPTree> wuXML = createPTree(GLOBAL_WORKUNIT);
+        Owned<CLocalWorkUnit> wu = new CCassandraWorkUnit(this, wuXML.getClear(), NULL, NULL, daliLock.getClear());
+        return &wu->lockRemote(false);
+    }
     virtual IConstWorkUnitIterator * getWorkUnitsByOwner(const char * owner, ISecManager *secmgr, ISecUser *secuser)
     {
         return getWorkUnitsByXXX("@submitID", owner, secmgr, secuser);
@@ -3168,10 +3200,7 @@ public:
             }
             unsigned waited = msTick() - start;
             if (timeout != -1 && waited > timeout)
-            {
                 return WUStateUnknown;
-                break;
-            }
             Sleep(1000); // MORE - may want to back off as waited gets longer...
         }
     }
@@ -3202,6 +3231,10 @@ public:
         errCount += checkOrphans(searchMappings, 3, batch);
         for (const ChildTableInfo * const * table = childTables; *table != NULL; table++)
             errCount += checkOrphans(table[0]->mappings, 1, batch);
+        errCount += checkOrphans(wuGraphProgressMappings, 1, batch);
+        errCount += checkOrphans(wuGraphStateMappings, 1, batch);
+        errCount += checkOrphans(wuGraphRunningMappings, 1, batch);
+
         // 3. Commit fixes
         if (batch)
         {
@@ -3239,6 +3272,9 @@ public:
         ensureTable(session, filesReadSearchMappings);
         for (const ChildTableInfo * const * table = childTables; *table != NULL; table++)
             ensureTable(session, table[0]->mappings);
+        ensureTable(session, wuGraphProgressMappings);
+        ensureTable(session, wuGraphStateMappings);
+        ensureTable(session, wuGraphRunningMappings);
     }
 
     virtual const char *queryStoreType() const
@@ -3392,7 +3428,7 @@ private:
             const CassRow *row = cass_iterator_get_row(rows);
             StringBuffer wuid;
             getCassString(wuid, cass_row_get_column(row, wuidIndex));
-            if (!checkWuExists(wuid))
+            if (!streq(wuid, GLOBAL_WORKUNIT) && !checkWuExists(wuid))
             {
                 DBGLOG("Orphaned data in %s for wuid=%s", queryTableName(mappings), wuid.str());
                 if (batch)

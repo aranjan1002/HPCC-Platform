@@ -507,10 +507,7 @@ void WsWuInfo::getHelpers(IEspECLWorkunit &info, unsigned flags)
 
             if (version > 1.30)
             {
-                SCMStringBuffer qText;
-                query->getQueryText(qText);
-                if ((qText.length() > 0) && isArchiveQuery(qText.str()))
-                    info.setHasArchiveQuery(true);
+                info.setHasArchiveQuery(query->isArchive());
             }
 
             for (unsigned i = 0; i < FileTypeSize; i++)
@@ -760,16 +757,12 @@ void WsWuInfo::getGraphInfo(IEspECLWorkunit &info, unsigned flags)
                     g->setWhenFinished(whenGraphFinished->getFormattedValue(s).str());
             }
 
-            Owned<IConstWUGraphProgress> progress = cw->getGraphProgress(name.str());
-            if (progress)
+            WUGraphState graphstate = cw->queryGraphState(name.str());
+            if (graphstate == WUGraphComplete)
+                g->setComplete(true);
+            if (version > 1.13 && graphstate == WUGraphFailed)
             {
-                WUGraphState graphstate= progress->queryGraphState();
-                if (graphstate == WUGraphComplete)
-                    g->setComplete(true);
-                if (version > 1.13 && graphstate == WUGraphFailed)
-                {
-                    g->setFailed(true);
-                }
+                g->setFailed(true);
             }
             graphs.append(*g.getLink());
         }

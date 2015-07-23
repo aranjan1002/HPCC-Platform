@@ -1953,7 +1953,6 @@ childDatasetType getChildDatasetType(IHqlExpression * expr)
     case no_split:
     case no_spill:
     case no_activerow:
-    case no_executewhen:  //second argument is independent of the other arguments
     case no_selectnth:
     case no_readspill:
     case no_commonspill:
@@ -1964,6 +1963,7 @@ childDatasetType getChildDatasetType(IHqlExpression * expr)
     case no_setgraphloopresult:
     case no_spillgraphresult:
         return childdataset_dataset_noscope;
+    case no_executewhen:  //second argument is independent of the other arguments
     case no_setresult:
     case no_sizeof:
     case no_offsetof:
@@ -2232,12 +2232,12 @@ inline unsigned doGetNumChildTables(IHqlExpression * dataset)
     case no_extractresult:
     case no_filtergroup:
     case no_forcegraph:
-    case no_executewhen:
     case no_normalizegroup:
     case no_owned_ds:
     case no_dataset_alias:
     case no_ensureresult:
         return 1;
+    case no_executewhen:
     case no_deserialize:
     case no_serialize:
         if (dataset->queryChild(0)->isDataset())
@@ -10606,11 +10606,6 @@ extern HQL_API IHqlExpression *createLinkAttribute(IAtom * name, IHqlExpression 
     return createAttribute(no_attr_link, name, value, value2, value3);
 }
 
-extern HQL_API IHqlExpression *createLinkAttribute(IAtom * name, HqlExprArray & args)
-{
-    return createAttribute(no_attr_link, name, args);
-}
-
 extern HQL_API IHqlExpression *createUnknown(node_operator op, ITypeInfo * type, IAtom * name, IInterface * extra)
 {
     IHqlExpression * ret = CHqlUnknown::makeUnknown(op, type, name, extra);
@@ -13060,6 +13055,7 @@ static IHqlExpression * processPseudoWorkflow(SharedHqlExpr & expr, HqlExprArray
             return LINK(workflow);
         }
     case no_attr:
+    case no_attr_expr:
         {
             IAtom * name = workflow->queryName();
             if (name == sectionAtom)

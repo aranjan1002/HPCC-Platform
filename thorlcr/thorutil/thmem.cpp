@@ -508,7 +508,7 @@ void CThorExpandingRowArray::doSort(rowidx_t n, void **const rows, ICompare &com
             dbgassertex(NULL != stableTable);
             stableTablePtr = stableTable;
         }
-        parqsortvecstableinplace(rows, n, compare, stableTablePtr, maxCores);
+        parsortvecstableinplace(rows, n, compare, stableTablePtr, maxCores);
     }
     else
         parqsortvec((void **const)rows, n, compare, maxCores);
@@ -755,6 +755,7 @@ void CThorExpandingRowArray::transferFrom(CThorExpandingRowArray &donor)
 void CThorExpandingRowArray::transferFrom(CThorSpillableRowArray &donor)
 {
     transferFrom((CThorExpandingRowArray &)donor);
+    donor.kill();
 }
 
 void CThorExpandingRowArray::removeRows(rowidx_t start, rowidx_t n)

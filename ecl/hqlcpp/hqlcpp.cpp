@@ -2363,6 +2363,9 @@ void HqlCppTranslator::buildExprAssign(BuildCtx & ctx, const CHqlBoundTarget & t
         buildStmt(ctx, expr->queryChild(0));
         buildExprAssign(ctx, target, expr->queryChild(1));
         break;
+    case no_executewhen:
+        doBuildAssignExecuteWhen(ctx, target, expr);
+        break;
     case no_concat:
         doBuildAssignConcat(ctx, target, expr);
         break;
@@ -3179,6 +3182,7 @@ void HqlCppTranslator::buildExpr(BuildCtx & ctx, IHqlExpression * expr, CHqlBoun
     case no_loopcounter:
     case no_toxml:
     case no_tojson:
+    case no_executewhen:
         buildTempExpr(ctx, expr, tgt);
         return;
     case no_asstring:
@@ -7213,6 +7217,34 @@ void HqlCppTranslator::doBuildAssignConcat(BuildCtx & ctx, const CHqlBoundTarget
     }
 }
 
+void HqlCppTranslator::doBuildAssignExecuteWhen(BuildCtx & ctx, const CHqlBoundTarget & target, IHqlExpression * expr)
+{
+    IHqlExpression * value = expr->queryChild(0);
+    IHqlExpression * action = expr->queryChild(1);
+
+    if (expr->hasAttribute(beforeAtom))
+    {
+        buildStmt(ctx, action);
+        buildExprAssign(ctx, target, value);
+    }
+    else if (expr->hasAttribute(failureAtom))
+    {
+        BuildCtx tryctx(ctx);
+        tryctx.addTry();
+        buildExprAssign(tryctx, target, value);
+
+        BuildCtx catchctx(ctx);
+        catchctx.addCatch(NULL);
+        buildStmt(catchctx, action);
+        catchctx.addThrow(NULL);
+    }
+    else
+    {
+        buildExprAssign(ctx, target, value);
+        buildStmt(ctx, action);
+    }
+}
+
 //---------------------------------------------------------------------------
 //-- no_div --
 // also used for no_modulus
@@ -8115,10 +8147,17 @@ void HqlCppTranslator::expandSimpleOrder(IHqlExpression * left, IHqlExpression *
 
     if (left->isDatarow())
     {
-        IHqlExpression * record = left->queryRecord();
-        assertex(right->isDatarow() && (record == right->queryRecord()));
-        expandRowOrder(left, record, leftValues, !isActiveRow(left) && (left->getOperator() != no_select));
-        expandRowOrder(right, record, rightValues, !isActiveRow(right) && (right->getOperator() != no_select));
+        IHqlExpression * leftRecord = left->queryRecord();
+        IHqlExpression * rightRecord = right->queryRecord();
+        assertex(right->isDatarow());
+        if (leftRecord != rightRecord)
+        {
+            OwnedHqlExpr leftSerialRecord = getSerializedForm(leftRecord, diskAtom);
+            OwnedHqlExpr rightSerialRecord = getSerializedForm(rightRecord, diskAtom);
+            assertex(leftSerialRecord  == rightSerialRecord);
+        }
+        expandRowOrder(left, leftRecord, leftValues, !isActiveRow(left) && (left->getOperator() != no_select));
+        expandRowOrder(right, rightRecord, rightValues, !isActiveRow(right) && (right->getOperator() != no_select));
     }
     else
     {

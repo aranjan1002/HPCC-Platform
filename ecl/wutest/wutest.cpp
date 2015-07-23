@@ -407,6 +407,7 @@ inline int min(int a, int b)
 class WuTest : public CppUnit::TestFixture
 {
     CPPUNIT_TEST_SUITE(WuTest);
+        CPPUNIT_TEST(testInit);
         CPPUNIT_TEST(testCreate);
         CPPUNIT_TEST(testValidate);
         CPPUNIT_TEST(testList);
@@ -418,11 +419,14 @@ class WuTest : public CppUnit::TestFixture
         CPPUNIT_TEST(testResults);
         CPPUNIT_TEST(testDelete);
         CPPUNIT_TEST(testCopy);
+        CPPUNIT_TEST(testQuery);
         CPPUNIT_TEST(testGraph);
+        CPPUNIT_TEST(testGraphProgress);
+        CPPUNIT_TEST(testGlobal);
     CPPUNIT_TEST_SUITE_END();
 protected:
     static StringArray wuids;
-    void testCreate()
+    void testInit()
     {
         Owned<IWorkUnitFactory> factory = getWorkUnitFactory();
         if (globals->getPropBool("entire", false) && globals->getPropBool("repository", false))
@@ -431,6 +435,10 @@ protected:
             factory->createRepository();
             DBGLOG("Repository recreated\n");
         }
+    }
+    void testCreate()
+    {
+        Owned<IWorkUnitFactory> factory = getWorkUnitFactory();
         unsigned before = factory->numWorkUnits();
         unsigned start = msTick();
         for (int i = 0; i < testSize; i++)
@@ -745,6 +753,42 @@ protected:
         factory->deleteWorkUnit(wuid);
     }
 
+    void testQuery()
+    {
+        Owned<IWorkUnitFactory> factory = getWorkUnitFactory();
+        Owned<IWorkUnit> createWu = factory->createWorkUnit("WuTest", NULL, NULL, NULL);
+        StringBuffer wuid(createWu->queryWuid());
+        {
+            Owned<IWUQuery> query = createWu->updateQuery();
+            ASSERT(query);
+            query->setQueryText("Hello");
+            query->setQueryName("qname");
+            query->setQueryMainDefinition("fred");
+            query->setQueryType(QueryTypeEcl);
+            query->addAssociatedFile(FileTypeCpp, "myfile", "1.2.3.4", "Description", 53);
+            createWu.clear();
+        }
+
+        Owned<IConstWorkUnit> wu = factory->openWorkUnit(wuid);
+        ASSERT(streq(wu->queryWuid(), wuid));
+        Owned<IConstWUQuery> query = wu->getQuery();
+        ASSERT(query);
+        SCMStringBuffer s;
+        ASSERT(streq(query->getQueryText(s).str(), "Hello"));
+        ASSERT(streq(query->getQueryName(s).str(), "qname"));
+        ASSERT(streq(query->getQueryMainDefinition(s).str(),"fred"));
+        ASSERT(query->getQueryType()==QueryTypeEcl);
+        Owned <IConstWUAssociatedFile> file = query->getAssociatedFile(FileTypeCpp, 0);
+        ASSERT(file);
+        ASSERT(streq(file->getDescription(s).str(), "Description"));
+        ASSERT(streq(file->getName(s).str(), "myfile"));
+        ASSERT(file->getCrc()==53);
+        ASSERT(file->getType()==FileTypeCpp);
+        ASSERT(streq(file->getIp(s).str(), "1.2.3.4"));
+        wu.clear();
+        factory->deleteWorkUnit(wuid);
+    }
+
     void testGraph()
     {
         Owned<IWorkUnitFactory> factory = getWorkUnitFactory();
@@ -864,8 +908,60 @@ protected:
             numIterated++;
         }
         ASSERT(numIterated==2);
+        wu.clear();
+        factory->deleteWorkUnit(wuid);
+    }
+    void testGraphProgress()
+    {
+        Owned<IWorkUnitFactory> factory = getWorkUnitFactory();
+        Owned<IWorkUnit> createWu = factory->createWorkUnit("WuTest", NULL, NULL, NULL);
+        StringBuffer wuid(createWu->queryWuid());
+        createWu->createGraph("graph1", "graphLabel", GraphTypeActivities, createPTreeFromXMLString("<graph><node id='1'/></graph>"));
+        createWu->setState(WUStateCompleted);
+        createWu->commit();
+        createWu.clear();
+        Owned<IConstWorkUnit> wu = factory->openWorkUnit(wuid);
+        ASSERT(streq(wu->queryWuid(), wuid));
 
-}
+        SCMStringBuffer s;
+        s.set("Not empty");
+        WUGraphIDType subid = 10;
+        bool ret = wu->getRunningGraph(s, subid);
+        ASSERT(!ret);
+        ASSERT(wu->queryGraphState("graph1")==WUGraphUnknown);
+        ASSERT(wu->queryNodeState("graph1", 1)==WUGraphUnknown);
+
+        wu->setGraphState("graph1",WUGraphRunning);
+        ASSERT(wu->queryGraphState("graph1")==WUGraphRunning);
+
+        wu->setNodeState("graph1", 1, WUGraphRunning);
+        ASSERT(wu->queryNodeState("graph1", 1)==WUGraphRunning);
+        ret = wu->getRunningGraph(s, subid);
+        ASSERT(ret);
+        ASSERT(streq(s.str(), "graph1"));
+        ASSERT(subid==1);
+
+        wu->setNodeState("graph1", 1, WUGraphComplete);
+        ASSERT(wu->queryNodeState("graph1", 1)==WUGraphComplete);
+        ret = wu->getRunningGraph(s, subid);
+        ASSERT(!ret);
+
+        Owned<IWUGraphStats> progress = wu->updateStats("graph1", SCThthor, queryStatisticsComponentName(), 1);
+        IStatisticGatherer & stats = progress->queryStatsBuilder();
+        {
+            StatsSubgraphScope subgraph(stats, 1);
+            stats.addStatistic(StTimeElapsed, 5000);
+        }
+        progress.clear();
+
+
+        ASSERT(wu->queryGraphState("graph1")==WUGraphRunning);
+        wu->clearGraphProgress();
+        ASSERT(wu->queryGraphState("graph1")==WUGraphUnknown);
+        wu.clear();
+        factory->deleteWorkUnit(wuid);
+    }
+
     void sortStatistics(StringBuffer &xml)
     {
         Owned<IPropertyTree> p = createPTreeFromXMLString(xml);
@@ -1435,7 +1531,6 @@ protected:
         unsigned numIterated = 0;
         // Test filter by filesRead
         WUSortField filterByFilesRead[] = { WUSFfileread, WUSFterm };
-        start = msTick();
         StringAttr prevValue;
         Owned<IConstWorkUnitIterator> wus = factory->getWorkUnitsSorted((WUSortField)(WUSFwuid|WUSFreverse), filterByFilesRead, "myfile00", 0, 10000, NULL, NULL);
         ForEach(*wus)
@@ -1449,6 +1544,27 @@ protected:
         DBGLOG("%d workunits by fileread wild in %d ms", numIterated, msTick()-start);
         ASSERT(numIterated == (testSize+9)/10);
         numIterated++;
+    }
+    void testGlobal()
+    {
+        // Is global workunit ever actually used any more? For scalar persists, perhaps
+        Owned<IWorkUnitFactory> factory = getWorkUnitFactory();
+        StringAttr prevValue;
+        Owned<IWorkUnit> global = factory->getGlobalWorkUnit(NULL, NULL);
+        ASSERT(global != NULL);
+        ASSERT(streq(global->queryWuid(), "global"));
+
+        Owned<IWUResult> result = global->updateGlobalByName("Result 1");
+        result->setResultScalar(true);
+        result->setResultInt(53);
+        result.clear();
+        global.clear();
+
+        Owned<IConstWorkUnit> wu = factory->getGlobalWorkUnit(NULL, NULL);
+        Owned<IConstWUResult> cresult = wu->getGlobalByName("Result 1");
+        ASSERT(cresult);
+        ASSERT(cresult->isResultScalar());
+        ASSERT(cresult->getResultInt()==53);
     }
 };
 StringArray WuTest::wuids;
