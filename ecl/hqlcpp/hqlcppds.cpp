@@ -1387,17 +1387,53 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
 
         assertex(subgraph->getOperator() == no_subgraph);
 
-        //MORE: check if the subgraph should be evaluated inline.  If so do generate the following
-        //otherwise add it to a list of out-of-line subgraphs
+        bool canChildGraphBeAssignedInline = true;
         ForEachChild(iActivity, subgraph)
         {
             IHqlExpression * cur = subgraph->queryChild(iActivity);
-            if (!cur->isAttribute())
+            DBGLOG(EclIR::getOperatorIRText(cur->getOperator()));
+            while (cur->queryChild(0) != NULL)
             {
-                const char* temp = EclIR::getOperatorIRText(cur->getOperator());
-                DBGLOG(temp);
-                assertex(cur->isAction());
-                translator.buildStmt(ctx, cur);
+                node_operator op = cur->getOperator();
+                DBGLOG(EclIR::getOperatorIRText(op));
+                if (!canAssignInline2(op))
+                {
+                    canChildGraphBeAssignedInline = false;
+                    break;
+                }
+                cur = cur->queryChild(0);
+            }
+        }
+
+        //MORE: check if the subgraph should be evaluated inline.  If so do generate the following
+        //otherwise add it to a list of out-of-line subgraphs
+        if (canChildGraphBeAssignedInline)
+        {
+            ForEachChild(iActivity, subgraph)
+            {
+                IHqlExpression * cur = subgraph->queryChild(iActivity);
+                if (!cur->isAttribute())
+                {
+                    assertex(cur->isAction());
+                    translator.buildStmt(ctx, cur);
+                }
+            }
+        }
+        else
+        {
+
+            HqlExprArray args;
+            ForEachChild(iActivity, subgraph)
+            {
+                IHqlExpression * cur = subgraph->queryChild(iActivity);
+                IHqlExpression * dataset = cur->queryChild(0);
+                IHqlExpression * graphId = cur->queryChild(1);
+                IHqlExpression * resultNum = cur->queryChild(2);
+
+                args.append(*LINK(dataset->queryRecord()));
+                args.append(*LINK(graphId));
+                args.append(*LINK(resultNum));
+                return createExprAttribute(resultAtom, args);
             }
         }
     }
@@ -1415,6 +1451,16 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
     //just those subgraphs.  i.e.,
     //return resourcedGraph->clone(outoflineSubgraphs);
     //Note, it should also include attributes in the array so they are preserved.
+}
+
+bool ChildGraphBuilder::canAssignInline2(node_operator op) {
+    switch(op)
+    {
+    case no_sort:
+        return false;
+    default:
+        return true;
+    }
 }
 
 void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
