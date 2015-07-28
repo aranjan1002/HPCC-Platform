@@ -1379,19 +1379,17 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
     //For the moment expand everything.  Later on this will need more work.
 
     assertex(resourcedGraph->getOperator() == no_subgraph);
-    HqlExprArray outoflineSubgraphs;
+
+    bool canSubgraphBeAssignedInline = true;
+
     ForEachChild(i, resourcedGraph)
     {
         IHqlExpression * subgraph = resourcedGraph->queryChild(i);
         if (subgraph->isAttribute())
-        {
-            outoflineSubgraphs.append(*LINK(subgraph));  // TODO: Should this be moved somewhere else?
             continue;
-        }
 
         assertex(subgraph->getOperator() == no_subgraph);
 
-        bool canSubgraphBeAssignedInline = true;
         ForEachChild(iActivity, subgraph)
         {
             IHqlExpression * cur = subgraph->queryChild(iActivity);
@@ -1402,26 +1400,10 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
                 break;
             }
         }
-
-        //MORE: check if the subgraph should be evaluated inline.  If so do generate the following
-        //otherwise add it to a list of out-of-line subgraphs
-        if (canSubgraphBeAssignedInline)
-        {
-            ForEachChild(iActivity, subgraph)
-            {
-                IHqlExpression * cur = subgraph->queryChild(iActivity);
-                if (!cur->isAttribute())
-                {
-                    assertex(cur->isAction());
-                    translator.buildStmt(ctx, cur);
-                }
-            }
-        }
-        else
-        {
-            outoflineSubgraphs.append(*LINK(subgraph));
-        }
     }
+
+    HqlExprArray outoflineSubgraphs = inlineOrKeepAsChildGraph(ctx, resourcedGraph,
+            canSubgraphBeAssignedInline);
 
     if (outoflineSubgraphs.empty())
     {
@@ -1443,6 +1425,35 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
     //just those subgraphs.  i.e.,
     //return resourcedGraph->clone(outoflineSubgraphs);
     //Note, it should also include attributes in the array so they are preserved.
+}
+
+HqlExprArray ChildGraphBuilder::inlineOrKeepAsChildGraph(BuildCtx & ctx,
+        IHqlExpression * resourcedGraph, bool canSubgraphBeAssignedInline)
+{
+    HqlExprArray outoflineSubgraphs;
+    ForEachChild(i, resourcedGraph)
+    {
+        IHqlExpression * subgraph = resourcedGraph->queryChild(i);
+        if (canSubgraphBeAssignedInline)
+        {
+            ForEachChild(iActivity, subgraph)
+                {
+                IHqlExpression * cur = subgraph->queryChild(iActivity);
+                if (!cur->isAttribute())
+                {
+                    assertex(cur->isAction());
+                    translator.buildStmt(ctx, cur);
+                }
+                }
+        }
+        else
+        {
+            outoflineSubgraphs.append(*LINK(subgraph));
+        }
+    }
+
+    return outoflineSubgraphs;
+
 }
 
 bool ChildGraphBuilder::canAssignInline2(BuildCtx * ctx, IHqlExpression * expr)

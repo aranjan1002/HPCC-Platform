@@ -58,6 +58,8 @@ protected:
     void createBuilderAlias(BuildCtx & ctx, ParentExtract * extractBuilder);
     IHqlExpression * optimizeInlineActivities(BuildCtx & ctx, IHqlExpression * resourcedGraph);
     bool canAssignInline2(BuildCtx * ctx, IHqlExpression * expr);
+    HqlExprArray inlineOrKeepAsChildGraph(BuildCtx & ctx,
+            IHqlExpression * resourcedGraph, bool canSubgraphBeAssignedInline);
 
 protected:
     HqlCppTranslator & translator;
