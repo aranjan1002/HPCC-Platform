@@ -1384,7 +1384,10 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
     {
         IHqlExpression * subgraph = resourcedGraph->queryChild(i);
         if (subgraph->isAttribute())
+        {
+            outoflineSubgraphs.append(*LINK(subgraph));
             continue;
+        }
 
         assertex(subgraph->getOperator() == no_subgraph);
 
@@ -1442,10 +1445,13 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
     //Note, it should also include attributes in the array so they are preserved.
 }
 
-bool ChildGraphBuilder::canAssignInline2(BuildCtx * ctx, IHqlExpression * expr) {
-    if (!canAssignInline(ctx, expr)) {
+bool ChildGraphBuilder::canAssignInline2(BuildCtx * ctx, IHqlExpression * expr)
+{
+    if (!canAssignInline(ctx, expr))
+    {
         node_operator op = expr->getOperator();
-        switch(op) {
+        switch(op)
+        {
         case no_setgraphresult:
             return canAssignInline2(ctx, expr->queryChild(0));
         default:
@@ -1478,9 +1484,9 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     EclIR::dbglogIR(resourced);
     if (translator.queryOptions().optimizeInlineOperations)
     {
-      //resourced.setown(optimizeInlineActivities(graphctx, resourced));
-      //if (!resourced)
-      //    return;
+        resourced.setown(optimizeInlineActivities(graphctx, resourced));
+        if (!resourced)
+            return;
     }
 
     Owned<ParentExtract> extractBuilder = translator.createExtractBuilder(graphctx, PETchild, represents, resourced, true);
