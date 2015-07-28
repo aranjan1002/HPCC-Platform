@@ -1385,7 +1385,7 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
         IHqlExpression * subgraph = resourcedGraph->queryChild(i);
         if (subgraph->isAttribute())
         {
-            outoflineSubgraphs.append(*LINK(subgraph));
+            outoflineSubgraphs.append(*LINK(subgraph));  // TODO: Should this be moved somewhere else?
             continue;
         }
 
