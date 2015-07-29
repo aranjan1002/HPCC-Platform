@@ -1437,14 +1437,15 @@ HqlExprArray ChildGraphBuilder::inlineOrKeepAsChildGraph(BuildCtx & ctx,
         if (canSubgraphBeAssignedInline)
         {
             ForEachChild(iActivity, subgraph)
-                {
+            {
                 IHqlExpression * cur = subgraph->queryChild(iActivity);
+                DBGLOG(EclIR::getOperatorIRText(cur->getOperator()));
                 if (!cur->isAttribute())
                 {
                     assertex(cur->isAction());
                     translator.buildStmt(ctx, cur);
                 }
-                }
+            }
         }
         else
         {
@@ -1453,7 +1454,6 @@ HqlExprArray ChildGraphBuilder::inlineOrKeepAsChildGraph(BuildCtx & ctx,
     }
 
     return outoflineSubgraphs;
-
 }
 
 bool ChildGraphBuilder::canAssignInline2(BuildCtx * ctx, IHqlExpression * expr)
