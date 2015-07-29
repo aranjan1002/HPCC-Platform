@@ -1385,7 +1385,7 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
         IHqlExpression * subgraph = resourcedGraph->queryChild(i);
         if (subgraph->isAttribute())
         {
-            outoflineSubgraphs.append(*LINK(subgraph));  // TODO: Should this be moved somewhere else?
+            //outoflineSubgraphs.append(*LINK(subgraph));  // TODO: Should this be moved somewhere else?
             continue;
         }
 
@@ -5087,9 +5087,9 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
     resultArgs.append(*LINK(resultNum));
     OwnedHqlExpr result = createExprAttribute(resultAtom, resultArgs);
 
-    //Check if this particular expression has been calculated inline already, and if
-    //so use that value.
-    //NOTE, needs more work and testing - this may fail if accessed from a nested child query
+        //Check if this particular expression has been calculated inline already, and if
+        //so use that value.
+        //NOTE, needs more work and testing - this may fail if accessed from a nested child query
     CHqlBoundExpr inlineBound;
     if (ctx.getMatchExpr(result, inlineBound))
         return inlineBound.getTranslatedExpr();
@@ -5164,7 +5164,11 @@ void HqlCppTranslator::doBuildAssignGetGraphResult(BuildCtx & ctx, const CHqlBou
     {
         CHqlBoundExpr match;
         if (!buildExprInCorrectContext(ctx, expr, match, false))
+        {
+            OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
+            buildExprAssign(ctx, target, call);
             throwError(HQLERR_GraphContextNotFound);
+        }
 
         assign(ctx, target, match);
         return;
