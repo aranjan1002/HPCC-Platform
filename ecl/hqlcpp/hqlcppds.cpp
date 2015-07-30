@@ -1294,7 +1294,7 @@ ChildGraphExprBuilder::ChildGraphExprBuilder(unsigned _numInputs)
     represents.setown(createAttribute(graphAtom, createUniqueId()));
     resultsExpr.setown(createAttribute(resultsAtom, LINK(represents)));
 }
-
+IHqlExpression *graphresult;
 IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
 {
     OwnedHqlExpr resultNumExpr;
@@ -1331,6 +1331,7 @@ IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
     OwnedHqlExpr ret = expr->isDictionary() ? createDictionary(no_getgraphresult, args) : createDataset(no_getgraphresult, args);
     if (expr->isDatarow())
         ret.setown(createRow(no_selectnth, LINK(ret), createComma(getSizetConstant(1), createAttribute(noBoundCheckAtom))));
+    graphresult = ret;
     return ret.getClear();
 }
 
@@ -5117,6 +5118,30 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
         if (expr->isDatarow())
             return bindFunctionCall(getChildQueryLinkedRowResultId, args, exprType);
         return bindFunctionCall(getChildQueryLinkedResultId, args, exprType);
+    }
+    else
+    {
+        IHqlExpression * resultInstance = queryAttributeChild(graphresult, externalAtom, 0);
+        HqlExprAssociation * matchedResults = ctx.queryMatchExpr(resultInstance);
+        if (!matchedResults)
+        {
+            //Very unusual - a result is required from a child query, but that child query is actually in
+            //the parent/grandparent.  We need to evaluate in the parent instead.
+            CHqlBoundExpr match;
+            if (!buildExprInCorrectContext(ctx, expr, match, false))
+                throwUnexpected();
+            return match.getTranslatedExpr();
+        }
+
+        HqlExprArray args;
+        args.append(*LINK(matchedResults->queryExpr()));
+        args.append(*LINK(resultNum));
+        if (expr->isDictionary())
+            return bindFunctionCall(getChildQueryDictionaryResultId, args, exprType);
+        if (expr->isDatarow())
+            return bindFunctionCall(getChildQueryLinkedRowResultId, args, exprType);
+        return bindFunctionCall(getChildQueryLinkedResultId, args, exprType);
+
     }
 
     assertex(activeActivities.ordinality());

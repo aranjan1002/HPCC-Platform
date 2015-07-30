@@ -7872,6 +7872,7 @@ void HqlCppTranslator::doBuildStmtSetGraphResult(BuildCtx & ctx, IHqlExpression 
 
     OwnedHqlExpr value = dataset->isDatarow() ? createDatasetFromRow(LINK(dataset)) : LINK(dataset);
     CHqlBoundExpr bound;
+
     buildTempExpr(ctx, value, bound);
     // buildTempExpr(ctx, dataset, bound);
     ctx.associateExpr(result, bound);
