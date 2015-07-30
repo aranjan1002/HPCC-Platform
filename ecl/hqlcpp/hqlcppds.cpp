@@ -1295,6 +1295,8 @@ ChildGraphExprBuilder::ChildGraphExprBuilder(unsigned _numInputs)
     resultsExpr.setown(createAttribute(resultsAtom, LINK(represents)));
 }
 
+IHqlExpression *graphresult;
+
 IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
 {
     OwnedHqlExpr resultNumExpr;
@@ -1331,6 +1333,7 @@ IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
     OwnedHqlExpr ret = expr->isDictionary() ? createDictionary(no_getgraphresult, args) : createDataset(no_getgraphresult, args);
     if (expr->isDatarow())
         ret.setown(createRow(no_selectnth, LINK(ret), createComma(getSizetConstant(1), createAttribute(noBoundCheckAtom))));
+    graphresult = ret;
     return ret.getClear();
 }
 
@@ -1373,6 +1376,9 @@ ChildGraphBuilder::ChildGraphBuilder(HqlCppTranslator & _translator, IHqlExpress
     numResults = (unsigned)getIntValue(subgraph->queryChild(1));
 }
 
+IHqlExpression *subgraphInlineLater[2];
+int cnt = 0;
+
 IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHqlExpression * resourcedGraph)
 {
     //Work out which activities in the resourced graph should be executed inline
@@ -1413,7 +1419,9 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
                 if (!cur->isAttribute())
                 {
                     assertex(cur->isAction());
-                    translator.buildStmt(ctx, cur);
+                    subgraphInlineLater[cnt++] = (LINK(cur));
+                    EclIR::dump_ir(cur);
+//                    translator.buildStmt(ctx, cur);
                 }
             }
         }
@@ -1489,6 +1497,9 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
             return;
     }
 
+    EclIR::dump_ir(subgraphInlineLater[0]);
+    EclIR::dump_ir(resourced);
+
     Owned<ParentExtract> extractBuilder = translator.createExtractBuilder(graphctx, PETchild, represents, resourced, true);
     if (!translator.queryOptions().serializeRowsetInExtract)
         extractBuilder->setAllowDestructor();
@@ -1525,6 +1536,10 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
 
     translator.endExtract(graphctx, extractBuilder);
     ctx.associateExpr(resultsExpr, resultInstanceExpr);
+
+    EclIR::dump_ir(subgraphInlineLater[0]);
+    translator.buildStmt(graphctx, subgraphInlineLater[0]);
+    translator.buildStmt(graphctx, subgraphInlineLater[1]);
 }
 
 void ChildGraphBuilder::generatePrefetchGraph(BuildCtx & _ctx, OwnedHqlExpr * retGraphExpr)
@@ -2557,6 +2572,7 @@ void HqlCppTranslator::buildDatasetAssign(BuildCtx & ctx, const CHqlBoundTarget 
     case no_nohoist:
     case no_section:
     case no_sectioninput:
+    case no_split:
         buildDatasetAssign(ctx, target, expr->queryChild(0));
         return;
     case no_if:
@@ -5118,6 +5134,30 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
             return bindFunctionCall(getChildQueryLinkedRowResultId, args, exprType);
         return bindFunctionCall(getChildQueryLinkedResultId, args, exprType);
     }
+    else
+    {
+        IHqlExpression * resultInstance = queryAttributeChild(graphresult, externalAtom, 0);
+        HqlExprAssociation * matchedResults = ctx.queryMatchExpr(resultInstance);
+        if (!matchedResults)
+        {
+            //Very unusual - a result is required from a child query, but that child query is actually in
+            //the parent/grandparent.  We need to evaluate in the parent instead.
+            CHqlBoundExpr match;
+            if (!buildExprInCorrectContext(ctx, expr, match, false))
+                throwUnexpected();
+            return match.getTranslatedExpr();
+        }
+
+        HqlExprArray args;
+        args.append(*LINK(matchedResults->queryExpr()));
+        args.append(*LINK(resultNum));
+        if (expr->isDictionary())
+            return bindFunctionCall(getChildQueryDictionaryResultId, args, exprType);
+        if (expr->isDatarow())
+            return bindFunctionCall(getChildQueryLinkedRowResultId, args, exprType);
+        return bindFunctionCall(getChildQueryLinkedResultId, args, exprType);
+
+    }
 
     assertex(activeActivities.ordinality());
     queryAddResultDependancy(activeActivities.tos(), graphId, resultNum);
@@ -5167,11 +5207,11 @@ void HqlCppTranslator::doBuildAssignGetGraphResult(BuildCtx & ctx, const CHqlBou
         {
             OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
             buildExprAssign(ctx, target, call);
-            throwError(HQLERR_GraphContextNotFound);
+          //  throwError(HQLERR_GraphContextNotFound);
         }
 
-        assign(ctx, target, match);
-        return;
+//        assign(ctx, target, match);
+//        return;
     }
 
     OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
