@@ -1333,7 +1333,7 @@ IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
     OwnedHqlExpr ret = expr->isDictionary() ? createDictionary(no_getgraphresult, args) : createDataset(no_getgraphresult, args);
     if (expr->isDatarow())
         ret.setown(createRow(no_selectnth, LINK(ret), createComma(getSizetConstant(1), createAttribute(noBoundCheckAtom))));
-    graphresult.setown(LINK(ret));
+    //graphresult.setown(LINK(ret));
     return ret.getClear();
 }
 
@@ -2578,7 +2578,7 @@ void HqlCppTranslator::buildDatasetAssign(BuildCtx & ctx, const CHqlBoundTarget 
     case no_nohoist:
     case no_section:
     case no_sectioninput:
-    case no_split:
+//    case no_split:
         buildDatasetAssign(ctx, target, expr->queryChild(0));
         return;
     case no_if:
