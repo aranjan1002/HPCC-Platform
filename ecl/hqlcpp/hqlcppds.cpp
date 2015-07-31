@@ -1377,7 +1377,7 @@ ChildGraphBuilder::ChildGraphBuilder(HqlCppTranslator & _translator, IHqlExpress
 }
 
 
-HqlExprArray subgraphInlineLater;
+//HqlExprArray subgraphInlineLater;
 
 IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHqlExpression * resourcedGraph)
 {
@@ -1499,7 +1499,7 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
 //            return;
     }
 
-    EclIR::dump_ir(subgraphInlineLater);
+//    EclIR::dump_ir(subgraphInlineLater);
     EclIR::dump_ir(resourced);
 
     Owned<ParentExtract> extractBuilder = translator.createExtractBuilder(graphctx, PETchild, represents, resourced, true);
@@ -1539,12 +1539,12 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     translator.endExtract(graphctx, extractBuilder);
     ctx.associateExpr(resultsExpr, resultInstanceExpr);
 
-    EclIR::dump_ir(subgraphInlineLater);
-    EclIR::dump_ir(resourced);
-    for(int i = 0; i < subgraphInlineLater.length(); i++)
-    {
-        translator.buildStmt(graphctx, &subgraphInlineLater.item(i));
-    }
+//    EclIR::dump_ir(subgraphInlineLater);
+//    EclIR::dump_ir(resourced);
+//    for(int i = 0; i < subgraphInlineLater.length(); i++)
+//    {
+//        translator.buildStmt(graphctx, &subgraphInlineLater.item(i));
+//    }
 
 }
 
@@ -5140,30 +5140,30 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
             return bindFunctionCall(getChildQueryLinkedRowResultId, args, exprType);
         return bindFunctionCall(getChildQueryLinkedResultId, args, exprType);
     }
-    else
-    {
-        IHqlExpression * resultInstance = queryAttributeChild(graphresult.get(), externalAtom, 0);
-        HqlExprAssociation * matchedResults = ctx.queryMatchExpr(resultInstance);
-        if (!matchedResults)
-        {
-            //Very unusual - a result is required from a child query, but that child query is actually in
-            //the parent/grandparent.  We need to evaluate in the parent instead.
-            CHqlBoundExpr match;
-            if (!buildExprInCorrectContext(ctx, expr, match, false))
-                throwUnexpected();
-            return match.getTranslatedExpr();
-        }
-
-        HqlExprArray args;
-        args.append(*LINK(matchedResults->queryExpr()));
-        args.append(*LINK(resultNum));
-        if (expr->isDictionary())
-            return bindFunctionCall(getChildQueryDictionaryResultId, args, exprType);
-        if (expr->isDatarow())
-            return bindFunctionCall(getChildQueryLinkedRowResultId, args, exprType);
-        return bindFunctionCall(getChildQueryLinkedResultId, args, exprType);
-
-    }
+//    else
+//    {
+//        IHqlExpression * resultInstance = queryAttributeChild(graphresult.get(), externalAtom, 0);
+//        HqlExprAssociation * matchedResults = ctx.queryMatchExpr(resultInstance);
+//        if (!matchedResults)
+//        {
+//            //Very unusual - a result is required from a child query, but that child query is actually in
+//            //the parent/grandparent.  We need to evaluate in the parent instead.
+//            CHqlBoundExpr match;
+//            if (!buildExprInCorrectContext(ctx, expr, match, false))
+//                throwUnexpected();
+//            return match.getTranslatedExpr();
+//        }
+//
+//        HqlExprArray args;
+//        args.append(*LINK(matchedResults->queryExpr()));
+//        args.append(*LINK(resultNum));
+//        if (expr->isDictionary())
+//            return bindFunctionCall(getChildQueryDictionaryResultId, args, exprType);
+//        if (expr->isDatarow())
+//            return bindFunctionCall(getChildQueryLinkedRowResultId, args, exprType);
+//        return bindFunctionCall(getChildQueryLinkedResultId, args, exprType);
+//
+//    }
 
     assertex(activeActivities.ordinality());
     queryAddResultDependancy(activeActivities.tos(), graphId, resultNum);
@@ -5199,7 +5199,7 @@ void HqlCppTranslator::doBuildAssignGetGraphResult(BuildCtx & ctx, const CHqlBou
             throwError(HQLERR_LoopTooComplexForParallel);
     }
 
-    if (expr->hasAttribute(externalAtom) || graphresult.get()->hasAttribute(externalAtom))
+    if (expr->hasAttribute(externalAtom)) // || graphresult.get()->hasAttribute(externalAtom))
     {
         OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
         buildExprAssign(ctx, target, call);
