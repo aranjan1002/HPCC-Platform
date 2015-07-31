@@ -1389,46 +1389,48 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
     ForEachChild(i, resourcedGraph)
     {
         IHqlExpression * subgraph = resourcedGraph->queryChild(i);
-        if (subgraph->isAttribute())
-        {
+//        if (subgraph->isAttribute())
+//        {
             //outoflineSubgraphs.append(*LINK(subgraph));  // TODO: Should this be moved somewhere else?
-            continue;
-        }
+//            continue;
+//        }
 
-        assertex(subgraph->getOperator() == no_subgraph);
+//        assertex(subgraph->getOperator() == no_subgraph);
 
-        bool canSubgraphBeAssignedInline = true;
-        ForEachChild(iActivity, subgraph)
-        {
-            IHqlExpression * cur = subgraph->queryChild(iActivity);
-            DBGLOG(EclIR::getOperatorIRText(cur->getOperator()));
-            if (!cur->isAttribute() && !canAssignInline2(&ctx, cur))
-            {
-                canSubgraphBeAssignedInline = false;
-                break;
-            }
-        }
+//        bool canSubgraphBeAssignedInline = true;
+//        ForEachChild(iActivity, subgraph)
+//        {
+//            IHqlExpression * cur = subgraph->queryChild(iActivity);
+//            DBGLOG(EclIR::getOperatorIRText(cur->getOperator()));
+//            if (!cur->isAttribute() && !canAssignInline2(&ctx, cur))
+//            {
+//                canSubgraphBeAssignedInline = false;
+//                break;
+//            }
+//        }
 
         //MORE: check if the subgraph should be evaluated inline.  If so do generate the following
         //otherwise add it to a list of out-of-line subgraphs
-        if (canSubgraphBeAssignedInline)
-        {
-            ForEachChild(iActivity, subgraph)
-            {
-                IHqlExpression * cur = subgraph->queryChild(iActivity);
-                if (!cur->isAttribute())
-                {
-                    assertex(cur->isAction());
-                    subgraphInlineLater[cnt++] = (LINK(cur));
-                    EclIR::dump_ir(cur);
+//        if (canSubgraphBeAssignedInline)
+//        {
+//            ForEachChild(iActivity, subgraph)
+//            {
+//                IHqlExpression * cur = subgraph->queryChild(iActivity);
+//                if (!cur->isAttribute())
+//                {
+//                    assertex(cur->isAction());
+//                    subgraphInlineLater[cnt++] = (LINK(cur));
+//                    EclIR::dump_ir(cur);
 //                    translator.buildStmt(ctx, cur);
-                }
-            }
-        }
-        else
-        {
+//                }
+//            }
+//        }
+//        else
+//        {
+            assertex((subgraph->getOperator() == no_subgraph) ||
+                    (subgraph->isAttribute()));
             outoflineSubgraphs.append(*LINK(subgraph));
-        }
+//        }
     }
 
     if (outoflineSubgraphs.empty())
