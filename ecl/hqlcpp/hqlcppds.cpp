@@ -1295,7 +1295,7 @@ ChildGraphExprBuilder::ChildGraphExprBuilder(unsigned _numInputs)
     resultsExpr.setown(createAttribute(resultsAtom, LINK(represents)));
 }
 
-IHqlExpression *graphresult;
+Owned<IHqlExpression> graphresult;
 
 IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
 {
@@ -1333,7 +1333,7 @@ IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
     OwnedHqlExpr ret = expr->isDictionary() ? createDictionary(no_getgraphresult, args) : createDataset(no_getgraphresult, args);
     if (expr->isDatarow())
         ret.setown(createRow(no_selectnth, LINK(ret), createComma(getSizetConstant(1), createAttribute(noBoundCheckAtom))));
-    graphresult = ret;
+    graphresult.setown(LINK(ret));
     return ret.getClear();
 }
 
@@ -1376,8 +1376,8 @@ ChildGraphBuilder::ChildGraphBuilder(HqlCppTranslator & _translator, IHqlExpress
     numResults = (unsigned)getIntValue(subgraph->queryChild(1));
 }
 
-IHqlExpression *subgraphInlineLater[2];
-int cnt = 0;
+
+HqlExprArray subgraphInlineLater;
 
 IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHqlExpression * resourcedGraph)
 {
@@ -1491,15 +1491,15 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     OwnedHqlExpr resourced = translator.getResourcedChildGraph(graphctx, childQuery, numResults, no_none);
 
     DBGLOG("Resourced child graph\n");
-    EclIR::dbglogIR(resourced);
+    EclIR::dump_ir(resourced);
     if (translator.queryOptions().optimizeInlineOperations)
     {
-        resourced.setown(optimizeInlineActivities(graphctx, resourced));
-        if (!resourced)
-            return;
+//        resourced.setown(optimizeInlineActivities(graphctx, resourced));
+//        if (!resourced)
+//            return;
     }
 
-    EclIR::dump_ir(subgraphInlineLater[0]);
+    EclIR::dump_ir(subgraphInlineLater);
     EclIR::dump_ir(resourced);
 
     Owned<ParentExtract> extractBuilder = translator.createExtractBuilder(graphctx, PETchild, represents, resourced, true);
@@ -1539,9 +1539,13 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     translator.endExtract(graphctx, extractBuilder);
     ctx.associateExpr(resultsExpr, resultInstanceExpr);
 
-    EclIR::dump_ir(subgraphInlineLater[0]);
-    translator.buildStmt(graphctx, subgraphInlineLater[0]);
-    translator.buildStmt(graphctx, subgraphInlineLater[1]);
+    EclIR::dump_ir(subgraphInlineLater);
+    EclIR::dump_ir(resourced);
+    for(int i = 0; i < subgraphInlineLater.length(); i++)
+    {
+        translator.buildStmt(graphctx, &subgraphInlineLater.item(i));
+    }
+
 }
 
 void ChildGraphBuilder::generatePrefetchGraph(BuildCtx & _ctx, OwnedHqlExpr * retGraphExpr)
@@ -5138,7 +5142,7 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
     }
     else
     {
-        IHqlExpression * resultInstance = queryAttributeChild(graphresult, externalAtom, 0);
+        IHqlExpression * resultInstance = queryAttributeChild(graphresult.get(), externalAtom, 0);
         HqlExprAssociation * matchedResults = ctx.queryMatchExpr(resultInstance);
         if (!matchedResults)
         {
@@ -5195,7 +5199,7 @@ void HqlCppTranslator::doBuildAssignGetGraphResult(BuildCtx & ctx, const CHqlBou
             throwError(HQLERR_LoopTooComplexForParallel);
     }
 
-    if (expr->hasAttribute(externalAtom))
+    if (expr->hasAttribute(externalAtom) || graphresult.get()->hasAttribute(externalAtom))
     {
         OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
         buildExprAssign(ctx, target, call);
@@ -5206,14 +5210,10 @@ void HqlCppTranslator::doBuildAssignGetGraphResult(BuildCtx & ctx, const CHqlBou
     {
         CHqlBoundExpr match;
         if (!buildExprInCorrectContext(ctx, expr, match, false))
-        {
-            OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
-            buildExprAssign(ctx, target, call);
-          //  throwError(HQLERR_GraphContextNotFound);
-        }
+            throwError(HQLERR_GraphContextNotFound);
 
-//        assign(ctx, target, match);
-//        return;
+        assign(ctx, target, match);
+        return;
     }
 
     OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
