@@ -1295,7 +1295,7 @@ ChildGraphExprBuilder::ChildGraphExprBuilder(unsigned _numInputs)
     resultsExpr.setown(createAttribute(resultsAtom, LINK(represents)));
 }
 
-IHqlExpression *graphresult;
+Owned<IHqlExpression> graphresult;
 
 IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
 {
@@ -1333,7 +1333,7 @@ IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
     OwnedHqlExpr ret = expr->isDictionary() ? createDictionary(no_getgraphresult, args) : createDataset(no_getgraphresult, args);
     if (expr->isDatarow())
         ret.setown(createRow(no_selectnth, LINK(ret), createComma(getSizetConstant(1), createAttribute(noBoundCheckAtom))));
-    graphresult = LINK(ret);
+    graphresult.setown(LINK(ret));
     return ret.getClear();
 }
 
@@ -5139,7 +5139,7 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
     }
     else
     {
-        IHqlExpression * resultInstance = queryAttributeChild(graphresult, externalAtom, 0);
+        IHqlExpression * resultInstance = queryAttributeChild(graphresult.get(), externalAtom, 0);
         HqlExprAssociation * matchedResults = ctx.queryMatchExpr(resultInstance);
         if (!matchedResults)
         {
@@ -5196,7 +5196,7 @@ void HqlCppTranslator::doBuildAssignGetGraphResult(BuildCtx & ctx, const CHqlBou
             throwError(HQLERR_LoopTooComplexForParallel);
     }
 
-    if (expr->hasAttribute(externalAtom))
+    if (expr->hasAttribute(externalAtom) || graphresult.get()->hasAttribute(externalAtom))
     {
         OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
         buildExprAssign(ctx, target, call);
@@ -5207,14 +5207,10 @@ void HqlCppTranslator::doBuildAssignGetGraphResult(BuildCtx & ctx, const CHqlBou
     {
         CHqlBoundExpr match;
         if (!buildExprInCorrectContext(ctx, expr, match, false))
-        {
-            OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
-            buildExprAssign(ctx, target, call);
-          //  throwError(HQLERR_GraphContextNotFound);
-        }
+            throwError(HQLERR_GraphContextNotFound);
 
-//        assign(ctx, target, match);
-//        return;
+        assign(ctx, target, match);
+        return;
     }
 
     OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
