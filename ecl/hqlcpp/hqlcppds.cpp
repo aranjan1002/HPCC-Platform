@@ -1494,9 +1494,9 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     EclIR::dump_ir(resourced);
     if (translator.queryOptions().optimizeInlineOperations)
     {
-//        resourced.setown(optimizeInlineActivities(graphctx, resourced));
-//        if (!resourced)
-//            return;
+        resourced.setown(optimizeInlineActivities(graphctx, resourced));
+        if (!resourced)
+            return;
     }
 
 //    EclIR::dump_ir(subgraphInlineLater);
