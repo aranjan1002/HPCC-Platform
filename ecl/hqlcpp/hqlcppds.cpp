@@ -1333,7 +1333,7 @@ IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
     OwnedHqlExpr ret = expr->isDictionary() ? createDictionary(no_getgraphresult, args) : createDataset(no_getgraphresult, args);
     if (expr->isDatarow())
         ret.setown(createRow(no_selectnth, LINK(ret), createComma(getSizetConstant(1), createAttribute(noBoundCheckAtom))));
-    graphresult = ret;
+    graphresult = LINK(ret);
     return ret.getClear();
 }
 
@@ -1376,8 +1376,8 @@ ChildGraphBuilder::ChildGraphBuilder(HqlCppTranslator & _translator, IHqlExpress
     numResults = (unsigned)getIntValue(subgraph->queryChild(1));
 }
 
-IHqlExpression *subgraphInlineLater[2];
-int cnt = 0;
+
+HqlExprArray subgraphInlineLater;
 
 IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHqlExpression * resourcedGraph)
 {
@@ -1419,7 +1419,7 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
                 if (!cur->isAttribute())
                 {
                     assertex(cur->isAction());
-                    subgraphInlineLater[cnt++] = (LINK(cur));
+                    subgraphInlineLater.append(*LINK(cur));
                     EclIR::dump_ir(cur);
 //                    translator.buildStmt(ctx, cur);
                 }
@@ -1497,7 +1497,7 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
             return;
     }
 
-    EclIR::dump_ir(subgraphInlineLater[0]);
+    EclIR::dump_ir(subgraphInlineLater);
     EclIR::dump_ir(resourced);
 
     Owned<ParentExtract> extractBuilder = translator.createExtractBuilder(graphctx, PETchild, represents, resourced, true);
@@ -1537,9 +1537,12 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     translator.endExtract(graphctx, extractBuilder);
     ctx.associateExpr(resultsExpr, resultInstanceExpr);
 
-    EclIR::dump_ir(subgraphInlineLater[0]);
-    translator.buildStmt(graphctx, subgraphInlineLater[0]);
-    translator.buildStmt(graphctx, subgraphInlineLater[1]);
+    EclIR::dump_ir(subgraphInlineLater);
+    for(int i = 0; i < subgraphInlineLater.length(); i++)
+    {
+        translator.buildStmt(graphctx, &subgraphInlineLater.item(i));
+    }
+
 }
 
 void ChildGraphBuilder::generatePrefetchGraph(BuildCtx & _ctx, OwnedHqlExpr * retGraphExpr)
