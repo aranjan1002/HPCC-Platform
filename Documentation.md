@@ -12,6 +12,7 @@ I went through all the links under these topics as they were very much related t
 * HPCC
 * ECL 
 * Installing HPCC
+
 In brief, HPCC is a platform to execute powerful queries on huge amounts of data (also called Big Data). The queries are written in an in-house declarative language called ECL. 
 
 HPCC is a direct competitor of MapReduce. A major advantage that HPCC has over MapReduce is that its query language is much more powerful and allows a variety of complex operations. On the other hand, it is also a bit of a drawback, because the user needs to understand how to use ECL and its various tools which may be a bit of a learning curve.
