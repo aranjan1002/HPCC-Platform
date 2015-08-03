@@ -30,7 +30,7 @@ With this I found that the best way to identify a child query is to look for the
 
 https://github.com/hpcc-systems/HPCC-Platform/tree/master/testing/regress/ecl
 
-Before getting to know HPCC, I have worked on mySQL and Oracle. In one of my courses, we had to develop a new database from scrach based on some C++ code framework. Until then, my view of a database system limited to some classic algorthms to execute database operations like select, sort, join etc and how to write functional queries in sql to get these done. The internship helped me explore to some extent a system in which all these features are already there. My work was to make some small tweaks and hope to have a favorable effect at the end.
+Before getting to know HPCC, I have worked on mySQL and Oracle. In one of my courses, we had to develop a new database from scrach based on some C++ code framework. Until then, my view of a database system limited to some classic algorthms to execute database operations like select, sort, join etc and how to write functional queries in sql to get these done. The internship helped me explore to some extent a system in which all these features are already there. My work was to make some small tweaks and hope to have a favorable effect at the end. 
 
 #During the internship
 I posted my weekly updates in the duration of internship here:
@@ -40,7 +40,7 @@ https://aranjan1002.wordpress.com/2015/07/26/6/
 I would go through some important details during my experiences as an intern. 
 
 ## Code Generator
-A major part of the internship was to understand the process of generating C++ and xml codes from an ECL query. 
+A major part of the internship was to understand the process of generating C++ and xml codes from an ECL query. The first step is converion of an ECL query into an expression graph. This expression graph consists of all the operations required to execute the query. Next, it is decided that which activity (or bunch of them) should be execute in a child query and which should be done inline. The function canProcessInline plays a major role in this decision. After this, some optimization are applied to the activities in the child graph. At the end the inline activities and the c++ implementation of childgraph activities are combined in c++ file. 
 
 ## Feedback
 At the end of internship I have the following questions/suggestions:
@@ -58,6 +58,6 @@ At the end of internship I have the following questions/suggestions:
 9. I have not understood the role of hash in sorting.
 10. If we have a documentation of all operators in node_operator, it will also be good to associate each of them with the proper url of the documentation here: http://hpccsystems.com/download/docs/ecl-language-reference/html
 11. I think it would be a great source of understanding ECL if each of the operators explained in here (http://hpccsystems.com/download/docs/ecl-language-reference/html) also contains examples of how it behaves on a given dataset. For example, we have an example dataset on which we can do these operation, and what changes are made with execution of each of these operations. There should be examples for each use of the given operator.
-12. I see that there a few terms which mean the same thing. For examle dataset and recordset and table (I guess?), field and column. If possible, it would be better address them as one unique term.
+12. I see that there a few terms which mean the same thing. For examle dataset and recordset and table (I guess?), field and column, operation and activity. If possible, it would be better address them as one unique term.
 13. Many similar topics here (http://hpccsystems.com/download/docs/ecl-language-reference/html) point to the same url. For example: Apply and Apply function. I am not sure whether that serves any purpose.
 
