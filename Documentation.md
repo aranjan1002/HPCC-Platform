@@ -62,3 +62,4 @@ At the end of internship I have the following questions/suggestions:
 13. Many similar topics here (http://hpccsystems.com/download/docs/ecl-language-reference/html) point to the same url. For example: Apply and Apply function. I am not sure whether that serves any purpose.
 14. It would probably be a good idea to generate an error if an option is not available but used in command line. For example if I use something like -fanyrandomthing, it does not generate an error.
 
+There are certain things which I believe were really valuable experiences for me during the internship. Getting to know how to work with github was a great addition to my resume. 
