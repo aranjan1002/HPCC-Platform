@@ -60,4 +60,5 @@ At the end of internship I have the following questions/suggestions:
 11. I think it would be a great source of understanding ECL if each of the operators explained in here (http://hpccsystems.com/download/docs/ecl-language-reference/html) also contains examples of how it behaves on a given dataset. For example, we have an example dataset on which we can do these operation, and what changes are made with execution of each of these operations. There should be examples for each use of the given operator.
 12. I see that there a few terms which mean the same thing. For examle dataset and recordset and table (I guess?), field and column, operation and activity. If possible, it would be better address them as one unique term.
 13. Many similar topics here (http://hpccsystems.com/download/docs/ecl-language-reference/html) point to the same url. For example: Apply and Apply function. I am not sure whether that serves any purpose.
+14. It would probably be a good idea to generate an error if an option is not available but used in command line. For example if I use something like -fanyrandomthing, it does not generate an error.
 
