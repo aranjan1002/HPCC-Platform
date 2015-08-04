@@ -34,11 +34,93 @@ https://github.com/hpcc-systems/HPCC-Platform/tree/master/testing/regress/ecl
 Before getting to know HPCC, I have worked on mySQL and Oracle. In one of my courses, we had to develop a new database from scrach based on some C++ code framework. Until then, my view of a database system limited to some classic algorthms to execute database operations like select, sort, join etc and how to write functional queries in sql to get these done. The internship helped me explore to some extent a system in which all these features are already there. My work was to make some small tweaks and hope to have a favorable effect at the end. 
 
 #During the internship
-I posted my weekly updates in the duration of internship here:
 
-https://aranjan1002.wordpress.com/2015/07/26/6/
+The initial steps involved forking the HPCC system on Github, building it locally and then installing it. There were a few glitches in the process, for example, at one point the ECL watch went blank. But they were solved after by talking with Gavin and Gordon. Then I went through the documentation of github to understand the basics. I believe my experience with github would be very productive for me in the future. I sent the pull request to the repo with the six examples that Gavin sent me. 
 
-I would go through some important details during my experiences as an intern. 
+Thereafter I setup the eclipse CDT and started debugging the code. It took some time to understand well the details of how to work with eclipse CDT. I have been used to working with emacs which had much limited features. After some discussions with Gavin, I was finally able to setup the debug configuration. It also took sometime to make sure that the eclcc.ini had all the required paths. 
+
+I started with debugging gsoc5. The part of this ecl code which was the point of concern is this:
+```
+ outRecord t1(idRecord l) := TRANSFORM
+     f := l.children(cid % 2 = 1); // those children whose cid % 2 = 1
+     SELF.child1:= ROW(makeNested(f(cid % 3 != 1)));
+     SELF.child2:= ROW(makeNested(f(cid % 4 != 1)));
+     SELF := l;
+ END;
+ ```
+
+The filter operation 'f' is evaluated inline twice for child1 and child2 as shown here:
+
+		for (;vQ--;) {
+			rowO = *curP++;
+			if ((long long)*((unsigned long long *)(rowO + 0U)) % 2LL == 1LL) {
+				if ((long long)*((unsigned long long *)(rowO + 0U)) % 3LL != 1LL) {
+					crM.append(rowO);
+				}
+			}
+		}
+	...........
+	...........
+		for (;vU--;) {
+			rowS = *curT++;
+			if ((long long)*((unsigned long long *)(rowS + 0U)) % 2LL == 1LL) {
+				if ((long long)*((unsigned long long *)(rowS + 0U)) % 4LL != 1LL) {
+					crR.append(rowS);
+				}
+			}
+		}
+
+My first impression was that I should be just debugging looking at the variables and try to figure out the place where the filter activity is generated inline. Then, I can try to change the code to see if I can make it evaluate only once. But as it turned out things are much more complex than that. Gavin told me to look at canProcessInline function to see which operators are evaluate inline and which not. The operator in my interest for this case was no\_filter. But it occurred to me that the function is called for multiple operators and I could not relate many of these operators with the actual ecl code. Even for the operators while look like they are relavant to the ECL code, I could not understand the expression associated with it. I was then introduced to the logging functions like EclIR::dump\_ir() and DBGLOG(). This helped me a bit. But the dump of EclIR::dump\_ir(IHqlExpression) was not very clear about which operator is contained in it. It seemed that it had a lot of other information. Eventually, I found that there is another function: EclIR::getOperatorIRText() to print exactly which operator is it working on. I tried to dig a bit deeper in canProcessInline function and went a few levels in the code. After some discussion with Gavin, I came to following conclusions:
+
+1. newAtom is used to indicate that the parent dataset or row that the column/fields is being selected from is not active. If a no_select has no newAtom attribute then it is a column selected from an active dataset (SQL cursor might be clearer).  E.g., ds(ds.myField = 10) ds.myField does not have a new atom because ds is not active within the scope it is used.
+2. The following function is checking for a filter condition that doesn’t relate to the dataset being filtered.
+```
+bool filterIsTableInvariant(IHqlExpression * expr)
+{
+    IHqlExpression * dsSelector = expr->queryChild(0)->queryNormalizedSelector();
+    ForEachChildFrom(i, expr, 1)
+    {
+        IHqlExpression * cur = expr->queryChild(i);
+        if (containsSelector(cur, dsSelector))
+            return false;
+    }
+    return true;
+}
+```
+3. Sort operations are not executed inline. It generates a child query. The following function contains more information about it. 
+```
+ABoundActivity * HqlCppTranslator::doBuildActivitySort(BuildCtx & ctx, IHqlExpression * expr)
+```
+At this point I thought that the code is too complex to really understand every little details about it. 
+
+I now shifted my focus on making my own dataset and maybe go on to experiment with how can I run queries on it to discover the problem with child queries. For this I wanted to get a good understanding about some basics of dabatabse creation in ECL like indexing, normalizing etc. I decided to go through this example ecl file for the purpose:
+https://github.com/hpcc-systems/ecl-samples/blob/master/bundles/CellFormatter/GenData/GenData.ecl
+
+Going through this raised a lot of questions in my mind. I will go through some of the points which I figures out after discussion with Gavin via email:
+
+1. Certains terms are used interchangeably in the ecl documentation like field and column, recordset and dataset and table.
+2. The normalize function:
+```
+NORMALIZE(BlankKids,TotalChildren,CreateKids(LEFT,COUNTER))
+```
+is an outdated idiom. It just seemed to call the CreateKids function TotalChildren (an integer) number of times on the dataset of BlankKids. The actual normalization process is done using other function, which I have not explored yet. A replacement for the above functions is:
+```
+DATASET(TotalChildren, CreateKids(COUNTER))
+```
+After this, I created my own dataset and is shown here:
+
+The creation of the database was a bit of a hassle because there were lot of formatting like single quotes which I needed to correct in excel. I tried to create some examples next to figure out the problem of child query. I did come up with an example of a count query which could have been more efficient. But it looked like it will take me a long time to actually be able to master ECL and come up with examples which identifies the problems. I often felt lost in the immense number of operations to look at. I was told that I should concentrate on the operations which are assigned false by canProcessInline functions. But since I did not have full confidence that I understood the function properly, I could not feel like I could venture into making my own ECL queries. Also, I was still uncertain about the link between an ECL action and the node operator activity which is responsible to execute that action. 
+
+Gavin was very understanding and he gave me an easier job of coming up with my own version of generated C++ code for gsoc5 and gsoc6 which would be efficient according to me. We were talking about making every activity in a child graph at this point. I went through the generated codes of gsoc5 and gsoc6 and came up with the following conclusions after discussion with Gavin:
+
+1. There can be a node inside a graph and a graph inside a node. Nodes inside graphs are the activities within a graph.
+2. Terms like cAc2 in c++ means activity in the node with id = 2 (note 2 at the end of cAc2) of the xml graph
+3. The xml graph is generated using IHqlExpression class instance for the activites which return false from canProcessInline()  
+
+I came up with a proposal of how should the generated C++ and xml files look like for gsoc5 and gsoc6 and can be seen here:
+
+
+In summary, my idea was to store the result of every activity in a child graph and split the result to other child graphs who need it. My Reasoning for the approach: From what I gathered so far, most of the optimization are done in child graphs. So, why not every activity in a child graph. Then split its result accordingly to who needs it. 
 
 ## Code Generator
 A major part of the internship was to understand the process of generating C++ and xml codes from an ECL query. The first step is converion of an ECL query into an expression graph. This expression graph consists of all the operations required to execute the query. Next, it is decided that which activity (or bunch of them) should be execute in a child query and which should be done inline. The function canProcessInline plays a major role in this decision. After this, some optimization are applied to the activities in the child graph. At the end the inline activities and the c++ implementation of childgraph activities are combined in c++ file. 
