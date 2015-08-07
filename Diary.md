@@ -1,3 +1,39 @@
+The aim of this documentation is to conserve my internship experiences and serve as an informative source for someone 
+who is just starting to learn the details of HPCC systems from scratch.
+
+The overall goal of my intersnhip is to improve the efficiency of execution of child queries. What is a child query and how can we go about improving it is explained in later parts of the document.
+
+#Before the internship
+Since, I applied for this using Google Summer of Code, I had to develop a good idea about the project to develop a proposal. The first goal was to get an understanding of what HPCC system is and how does it work. The links on this page does this job pretty well:
+
+    http://hpccsystems.com/community/training-videos
+    
+I went through all the links under these topics as they were very much related to my work. 
+* HPCC
+* ECL 
+* Installing HPCC
+
+In brief, HPCC is a platform to execute powerful queries on huge amounts of data (also called Big Data). The queries are written in an in-house declarative language called ECL. 
+
+HPCC is a direct competitor of MapReduce. A major advantage that HPCC has over MapReduce is that its query language is much more powerful and allows a variety of complex operations. On the other hand, it is also a bit of a drawback, because the user needs to understand how to use ECL and its various tools which may be a bit of a learning curve.
+
+Quite often I came across the terms: thor, hthor and roxie. I found it best to consider them as different physical clusters of computers. They vary in the way they execute certain aspects of an ECL query. It is my guess that thor is used for large datasets and roxie for small ones.
+
+The next step was to understand some ECL queries and see how it worked. Each ECL query is first converted to xml and c++ code. The execution engine uses these two execute the query. Gavin sent me some basic example queries. In addition, the following two links helped me quite a lot:
+
+https://github.com/hpcc-systems/HPCC-Platform/blob/master/ecl/eclcc/DOCUMENTATION.rst
+
+http://hpccsystems.com/download/docs/ecl-language-reference/html
+
+The first link is to understand some fine details in the processing of an ECL query. Now that I look back at it, a lot more things seem to make sense compared to how it looked when I initially read it. The second link is useful to understand any particular line in the ECL code. Since, there could be many syntax of any given operation, this may get confusing. It is good to think of them as overloaded functions. 
+
+With this I found that the best way to identify a child query is to look for the element: child="1" in the generated xml graph. Via email, I was told that what are the potential problems in the generation of child queries. I tried to come up with ECL queries to create those problems but was unable to do so. Eventually, Gavin sent me a bunch of examples ecl codes: gsoc1 to gsoc6, which explored the relevant problems. The ecl files can be found here:
+
+https://github.com/hpcc-systems/HPCC-Platform/tree/master/testing/regress/ecl
+
+Before getting to know HPCC, I have worked on mySQL and Oracle. In one of my courses, we had to develop a new database from scrach based on some C++ code framework. Until then, my view of a database system limited to some classic algorthms to execute database operations like select, sort, join etc and how to write functional queries in sql to get these done. The internship helped me explore to some extent a system in which all these features are already there. My work was to make some small tweaks and hope to have a favorable effect at the end. 
+
+#During the internship
 The initial steps involved forking the HPCC system on Github, building it locally and then installing it. There were a few glitches in the process, for example, at one point the ECL watch went blank. But they were solved after by talking with Gavin and Gordon. Then I went through the documentation of github to understand the basics. I believe my experience with github would be very productive for me in the future. I sent the pull request to the repo with the six examples that Gavin sent me. 
 
 Thereafter I setup the eclipse CDT and started debugging the code. It took some time to understand well the details of how to work with eclipse CDT. I have been used to working with emacs which had much limited features. After some discussions with Gavin, I was finally able to setup the debug configuration. One thing which needs attention while setting up the configuration is the selection of process launcher. After clicking Debug configuration I clicked Select Other at the bottom and selected 'Use Legacy Create Process launcher'.  It also took sometime to make sure that the eclcc.ini had all the required paths. 
