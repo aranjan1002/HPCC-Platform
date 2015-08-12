@@ -1296,6 +1296,7 @@ ChildGraphExprBuilder::ChildGraphExprBuilder(unsigned _numInputs)
 }
 
 Owned<IHqlExpression> graphresult;
+extern HqlExprArray transformedArr;
 
 IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
 {
@@ -1402,6 +1403,7 @@ IHqlExpression * ChildGraphBuilder::optimizeInlineActivities(BuildCtx & ctx, IHq
         {
             IHqlExpression * cur = subgraph->queryChild(iActivity);
             DBGLOG(EclIR::getOperatorIRText(cur->getOperator()));
+            EclIR::dump_ir(cur);
             if (!cur->isAttribute() && !canAssignInline2(&ctx, cur))
             {
                 canSubgraphBeAssignedInline = false;
@@ -1538,6 +1540,23 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     ctx.associateExpr(resultsExpr, resultInstanceExpr);
 
     EclIR::dump_ir(subgraphInlineLater);
+
+    int cnt = transformedArr.length();
+    for (int i = 1; i <= cnt; i++)
+    {
+        OwnedHqlExpr transformed = &transformedArr.item(i - 1);
+        HqlExprArray args;
+        args.append(*LINK(transformed.get()->queryChild(0)->queryRecord()));
+        args.append(*LINK(transformed.get()->queryChild(1)));
+        args.append(*LINK(transformed.get()->queryChild(2)));
+        OwnedHqlExpr result = createExprAttribute(externalAtom, args);
+
+        CHqlBoundExpr inlineBound;
+        if (ctx.getMatchExpr(result, inlineBound))
+            DBGLOG("Found it");
+        if (graphctx.getMatchExpr(result, inlineBound))
+            DBGLOG("Found it again");
+    }
     for(int i = 0; i < subgraphInlineLater.length(); i++)
     {
         translator.buildStmt(graphctx, &subgraphInlineLater.item(i));
@@ -5091,9 +5110,26 @@ IReferenceSelector * HqlCppTranslator::buildDatasetSelectMap(BuildCtx & ctx, IHq
 }
 
 //---------------------------------------------------------------------------
+int cnt = 0;
 
 IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpression * expr)
 {
+    int cnt2 = transformedArr.length();
+    for (int i = 1; i <= cnt2; i++)
+    {
+        OwnedHqlExpr transformed = &transformedArr.item(i - 1);
+        HqlExprArray args;
+        args.append(*LINK(transformed.get()->queryChild(0)->queryRecord()));
+        args.append(*LINK(transformed.get()->queryChild(1)));
+        args.append(*LINK(transformed.get()->queryChild(2)));
+        OwnedHqlExpr result = createExprAttribute(externalAtom, args);
+
+        CHqlBoundExpr inlineBound;
+        if (ctx.getMatchExpr(result, inlineBound))
+            DBGLOG("Found it");
+        else ctx.associateExpr(result, transformed);
+    }
+
     IHqlExpression * graphId = expr->queryChild(1);
     IHqlExpression * resultNum = expr->queryChild(2);
     Linked<ITypeInfo> exprType = queryUnqualifiedType(expr->queryType());
@@ -5101,9 +5137,19 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
         exprType.setown(makeAttributeModifier(LINK(exprType), getLinkCountedAttr()));
 
     HqlExprArray resultArgs;
+    EclIR::dump_ir(expr->queryRecord());
+    EclIR::dump_ir(graphId);
+    EclIR::dump_ir(resultNum);
+
     resultArgs.append(*LINK(expr->queryRecord()));
     resultArgs.append(*LINK(graphId));
     resultArgs.append(*LINK(resultNum));
+
+    CHqlBoundExpr inlineBound2;
+    OwnedHqlExpr result2 = createExprAttribute(externalAtom, resultArgs);
+    if (ctx.getMatchExpr(result2, inlineBound2))
+        DBGLOG("Found it");
+
     OwnedHqlExpr result = createExprAttribute(resultAtom, resultArgs);
 
         //Check if this particular expression has been calculated inline already, and if
@@ -5137,12 +5183,14 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
             return bindFunctionCall(getChildQueryLinkedRowResultId, args, exprType);
         return bindFunctionCall(getChildQueryLinkedResultId, args, exprType);
     }
-    else
+    else if (cnt < transformedArr.length())
     {
-        IHqlExpression * resultInstance = queryAttributeChild(graphresult.get(), externalAtom, 0);
+        //expr = &transformedArr.item(cnt++);
+        IHqlExpression * resultInstance = queryAttributeChild(&transformedArr.item(cnt++), externalAtom, 0);
         HqlExprAssociation * matchedResults = ctx.queryMatchExpr(resultInstance);
         if (!matchedResults)
         {
+            //return NULL;
             //Very unusual - a result is required from a child query, but that child query is actually in
             //the parent/grandparent.  We need to evaluate in the parent instead.
             CHqlBoundExpr match;
@@ -5207,7 +5255,11 @@ void HqlCppTranslator::doBuildAssignGetGraphResult(BuildCtx & ctx, const CHqlBou
     {
         CHqlBoundExpr match;
         if (!buildExprInCorrectContext(ctx, expr, match, false))
+        {
+            OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
+            buildExprAssign(ctx, target, call);
             throwError(HQLERR_GraphContextNotFound);
+        }
 
         assign(ctx, target, match);
         return;

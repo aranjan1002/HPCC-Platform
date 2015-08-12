@@ -275,6 +275,8 @@ MemberFunction::~MemberFunction()
 
 //---------------------------------------------------------------------------
 
+HqlExprArray transformedArr;
+
 static HqlTransformerInfo childDatasetSpotterInfo("ChildDatasetSpotter");
 class NewChildDatasetSpotter : public ConditionalContextTransformer
 {
@@ -427,6 +429,16 @@ public:
         IHqlExpression * annotated = candidate->firstAnnotatedExpr ? candidate->firstAnnotatedExpr : expr;
         OwnedHqlExpr guarded = createGuardedDefinition(moveTo, annotated, guard);
         OwnedHqlExpr transformed = builder.addDataset(guarded);
+        EclIR::dump_ir(transformed.get()->queryChild(0)->queryRecord());
+        EclIR::dump_ir(transformed.get()->queryChild(1));
+        EclIR::dump_ir(transformed.get()->queryChild(2));
+        HqlExprArray args;
+        args.append(*LINK(transformed.get()->queryChild(0)->queryRecord()));
+        args.append(*LINK(transformed.get()->queryChild(1)));
+        args.append(*LINK(transformed.get()->queryChild(2)));
+        OwnedHqlExpr result = createExprAttribute(externalAtom, args);
+        ctx.associateExpr(result, transformed);
+        transformedArr.append(*LINK(transformed.get()));
 
         if (moveTo == candidate)
         {
