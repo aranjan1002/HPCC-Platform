@@ -1297,6 +1297,8 @@ ChildGraphExprBuilder::ChildGraphExprBuilder(unsigned _numInputs)
 
 Owned<IHqlExpression> graphresult;
 
+HqlExprArray transformedArr;
+
 IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
 {
     OwnedHqlExpr resultNumExpr;
@@ -1334,6 +1336,7 @@ IHqlExpression * ChildGraphExprBuilder::addDataset(IHqlExpression * expr)
     if (expr->isDatarow())
         ret.setown(createRow(no_selectnth, LINK(ret), createComma(getSizetConstant(1), createAttribute(noBoundCheckAtom))));
     graphresult.setown(LINK(ret));
+    transformedArr.append(*LINK(ret));
     return ret.getClear();
 }
 
@@ -5091,7 +5094,7 @@ IReferenceSelector * HqlCppTranslator::buildDatasetSelectMap(BuildCtx & ctx, IHq
 }
 
 //---------------------------------------------------------------------------
-
+int cnt = 0;
 IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpression * expr)
 {
     IHqlExpression * graphId = expr->queryChild(1);
@@ -5137,9 +5140,9 @@ IHqlExpression * HqlCppTranslator::buildGetLocalResult(BuildCtx & ctx, IHqlExpre
             return bindFunctionCall(getChildQueryLinkedRowResultId, args, exprType);
         return bindFunctionCall(getChildQueryLinkedResultId, args, exprType);
     }
-    else
+    else if(cnt < transformedArr.length())
     {
-        IHqlExpression * resultInstance = queryAttributeChild(graphresult.get(), externalAtom, 0);
+        IHqlExpression * resultInstance = queryAttributeChild(&transformedArr.item(cnt++), externalAtom, 0);
         HqlExprAssociation * matchedResults = ctx.queryMatchExpr(resultInstance);
         if (!matchedResults)
         {
@@ -5196,7 +5199,8 @@ void HqlCppTranslator::doBuildAssignGetGraphResult(BuildCtx & ctx, const CHqlBou
             throwError(HQLERR_LoopTooComplexForParallel);
     }
 
-    if (expr->hasAttribute(externalAtom) || graphresult.get()->hasAttribute(externalAtom))
+    if (expr->hasAttribute(externalAtom) || graphresult.get()->hasAttribute(externalAtom)
+            || cnt < transformedArr.length())
     {
         OwnedHqlExpr call = buildGetLocalResult(ctx, expr);
         buildExprAssign(ctx, target, call);
