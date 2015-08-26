@@ -1541,10 +1541,10 @@ void ChildGraphBuilder::generateGraph(BuildCtx & ctx)
     ctx.associateExpr(resultsExpr, resultInstanceExpr);
 
     EclIR::dump_ir(subgraphInlineLater);
-    for(int i = 0; i < subgraphInlineLater.length(); i++)
-    {
-        translator.buildStmt(graphctx, &subgraphInlineLater.item(i));
-    }
+//    for(int i = 0; i < subgraphInlineLater.length(); i++)
+//    {
+//        translator.buildStmt(graphctx, &subgraphInlineLater.item(i));
+//    }
 
 }
 

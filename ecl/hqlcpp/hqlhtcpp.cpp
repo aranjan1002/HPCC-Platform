@@ -602,7 +602,7 @@ protected:
         return createValue(conditionExpr->getOperator(), makeVoidType(), args);
     }
 };
-
+extern HqlExprArray subgraphInlineLater;
 class DelayedStatementExecutor
 {
 public:
@@ -656,6 +656,10 @@ public:
         ForEachItemIn(i, pending)
             translator.buildStmt(ctx, &pending.item(i));
         pending.kill();
+        for(int i = 0; i < subgraphInlineLater.length(); i++)
+                {
+                    translator.buildStmt(ctx, &subgraphInlineLater.item(i));
+                }
     }
 
     void optimize()
